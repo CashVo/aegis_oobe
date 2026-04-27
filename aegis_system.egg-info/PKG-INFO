@@ -1,3 +1,33 @@
+Metadata-Version: 2.4
+Name: aegis-system
+Version: 0.1.0
+Summary: A local-first, multi-agent AI system.
+Author-email: Cash Vo <cash.vo@example.com>
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic<3.0,>=2.7
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: structlog>=24.1
+Requires-Dist: typer[all]>=0.12
+Requires-Dist: redis>=5.0
+Requires-Dist: fastapi>=0.111
+Requires-Dist: uvicorn[standard]>=0.29
+Requires-Dist: apscheduler>=3.10
+Requires-Dist: mcp>=1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: mypy>=1.9; extra == "dev"
+Dynamic: license-file
+
 # File: README.md
 # Purpose: Project overview, setup, and architecture summary.
 

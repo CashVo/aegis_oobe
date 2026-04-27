@@ -1,0 +1,58 @@
+# File: pyproject.toml
+# Purpose: PEP 621 metadata, dependencies, and CLI entry point for Aegis.
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-system"
+version = "0.1.0"
+authors = [
+  { name="Cash Vo", email="cash.vo@example.com" },
+]
+description = "A local-first, multi-agent AI system."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pydantic>=2.7,<3.0",
+    "pyyaml>=6.0",
+    "structlog>=24.1",
+    "typer[all]>=0.12",
+    "redis>=5.0",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "apscheduler>=3.10",
+    "mcp>=1.0", # Placeholder for Model Context Protocol
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.9"
+]
+
+[project.scripts]
+aegis = "aegis.main:cli_app"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aegis*"]
+exclude = ["tests*"]

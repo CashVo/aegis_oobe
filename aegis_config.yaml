@@ -1,0 +1,23 @@
+# File: aegis_config.yaml
+# Purpose: Default config template. Values here are the lowest precedence.
+
+project_name: "aegis"
+version: "0.1.0"
+log_level: "INFO" # CRITICAL, ERROR, WARNING, INFO, DEBUG
+
+# Root directory for all persistent data, partitioned by tenant/user.
+data_dir: "aegis_data"
+
+# Redis connection for the message bus (CHUNK-002)
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  db: 0
+
+# API server configuration (for Janus agent, CHUNK-006)
+api:
+  host: "127.0.0.1"
+  port: 8000
+
+# Default timeout for agent request-response cycles.
+agent_timeout_s: 30

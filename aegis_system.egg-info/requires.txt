@@ -1,0 +1,15 @@
+pydantic<3.0,>=2.7
+pyyaml>=6.0
+structlog>=24.1
+typer[all]>=0.12
+redis>=5.0
+fastapi>=0.111
+uvicorn[standard]>=0.29
+apscheduler>=3.10
+mcp>=1.0
+
+[dev]
+pytest>=8.0
+pytest-asyncio>=0.23
+ruff>=0.4
+mypy>=1.9

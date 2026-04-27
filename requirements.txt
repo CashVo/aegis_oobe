@@ -1,0 +1,14 @@
+# File: requirements.txt
+# Purpose: Pinned/compatible-release deps for reproducible environments.
+# Generated from pyproject.toml. Use `pip install -r requirements.txt`.
+
+pydantic==2.7.1
+pyyaml==6.0.1
+structlog==24.1.0
+typer==0.12.3
+redis==5.0.4
+fastapi==0.111.0
+uvicorn==0.29.0
+apscheduler==3.10.4
+# mcp is a placeholder, assuming a version
+# mcp==1.0.0
