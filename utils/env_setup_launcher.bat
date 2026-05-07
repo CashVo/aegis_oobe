@@ -1,0 +1,1 @@
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\TClaw\Documents\aegis_oobe\env_setup.ps1"

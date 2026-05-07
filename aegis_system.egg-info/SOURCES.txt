@@ -2,10 +2,15 @@ LICENSE
 README.md
 pyproject.toml
 aegis/__init__.py
+aegis/__main__.py
 aegis/main.py
 aegis/agents/__init__.py
 aegis/agents/base.py
 aegis/bus/__init__.py
+aegis/bus/connection.py
+aegis/bus/constants.py
+aegis/bus/publisher.py
+aegis/bus/subscriber.py
 aegis/config/__init__.py
 aegis/config/loader.py
 aegis/schemas/__init__.py
