@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "aegis-system"
 version = "0.1.0"
 authors = [
-  { name="Cash Vo", email="cash.vo@example.com" },
+  { name="Cash Vo", email="cash.vo@gmail.com" },
 ]
 description = "A local-first, multi-agent AI system."
 readme = "README.md"
