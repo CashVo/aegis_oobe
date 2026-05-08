@@ -12,3 +12,6 @@ uvicorn==0.29.0
 apscheduler==3.10.4
 # mcp is a placeholder, assuming a version
 # mcp==1.0.0
+
+# CHUNK-004: Identity Agent
+aiosqlite>=0.19.0
