@@ -22,8 +22,8 @@ CHUNK_003_FILES = {
     # SCHEMAS
     # ===================================================================
 
-    "src/aegis/schemas/warden.py": '''
-# src/aegis/schemas/warden.py
+    "aegis/schemas/warden.py": '''
+# aegis/schemas/warden.py
 """
 Warden Protocol Schemas.
 Implements: Part VI, §6.4 — Warden Protocol
@@ -111,8 +111,8 @@ class WardenAction(str, Enum):
     # WARDEN PACKAGE
     # ===================================================================
 
-    "src/aegis/warden/__init__.py": '''
-# src/aegis/warden/__init__.py
+    "aegis/warden/__init__.py": '''
+# aegis/warden/__init__.py
 """
 Warden — Security Gatekeeper for Project Aegis.
 Implements: Part II §2.1 (Warden role)
@@ -140,8 +140,8 @@ __all__ = [
     # PERMISSION MODEL
     # ===================================================================
 
-    "src/aegis/warden/permission_model.py": '''
-# src/aegis/warden/permission_model.py
+    "aegis/warden/permission_model.py": '''
+# aegis/warden/permission_model.py
 """
 Permission Model — Role-Based Access Control Engine.
 Implements: Part V §5.2 (Default Roles), Part VI §6.4 (Warden Protocol)
@@ -193,7 +193,7 @@ DEFAULT_ROLES: Dict[str, Dict[str, Any]] = {
     "member": {
         "permissions": [
             "memory.read", "memory.write.own",
-            "tool.execute", "skill.execute",
+            "tool.execute", "skill.execute", "file.read",
         ],
         "is_system_role": True,
         "description": "Standard user access. Can use tools and manage own memory.",
@@ -348,45 +348,28 @@ class PermissionModel:
         """
         Check if a set of user permissions satisfies a required permission.
 
-        Supports:
-            - Wildcard (*) grants all permissions
-            - Exact match (e.g., "file.read" satisfies "file.read")
-            - Prefix match (e.g., "memory.write" satisfies "memory.write.own")
-
-        Args:
-            user_permissions: The user's granted permission set.
-            required_permission: The permission required for the action.
-
-        Returns:
-            True if the permission is satisfied, False otherwise.
+        Supports wildcard, exact match, and prefix matching (e.g., having
+        'a.b' grants permission for the more specific 'a.b.c').
         """
         if not required_permission:
-            return True  # No permission required
-
-        if self.has_wildcard(user_permissions):
             return True
 
-        if required_permission in user_permissions:
+        if "*" in user_permissions:
             return True
 
-        # Check if any user permission is a prefix of the required permission
-        # e.g., user has "memory.write" which covers "memory.write.own"
+        # Check for exact match or if a broader permission exists.
         for perm in user_permissions:
-            if required_permission.startswith(perm + ".") or perm.startswith(required_permission + "."):
-                # The second condition: user has "memory.write.own" and requires "memory.write"
-                # This should NOT grant access (more specific doesn't grant broader)
-                # Only: broader grants more specific
-                pass
-            if required_permission.startswith(perm + "."):
+            # Case 1: The user has the exact permission required.
+            if perm == required_permission:
                 return True
-            # Check if user has broader permission
-            # e.g., user has "memory.write" and required is "memory.write.own"
-            if required_permission.startswith(perm):
-                # Ensure it's a proper prefix (not partial match like "file" matching "file_read")
-                if len(perm) == len(required_permission) or required_permission[len(perm)] == ".":
-                    return True
+            
+            # Case 2: The user has a broader permission that is a prefix
+            # of the required one (e.g., user has 'a.b', req is 'a.b.c').
+            if required_permission.startswith(perm + '.'):
+                return True
 
         return False
+
 
     def evaluate(
         self,
@@ -486,8 +469,8 @@ class PermissionModel:
     # ALLOWLIST ENGINE
     # ===================================================================
 
-    "src/aegis/warden/allowlist.py": '''
-# src/aegis/warden/allowlist.py
+    "aegis/warden/allowlist.py": '''
+# aegis/warden/allowlist.py
 """
 Allowlist Engine — Shell Command Authorization.
 Implements: Part XIII, RT-6 — Unbounded Shell Execution Mitigation
@@ -837,8 +820,8 @@ class AllowlistEngine:
     # MESSAGE INTERCEPTOR
     # ===================================================================
 
-    "src/aegis/warden/interceptor.py": '''
-# src/aegis/warden/interceptor.py
+    "aegis/warden/interceptor.py": '''
+# aegis/warden/interceptor.py
 """
 Message Interceptor — Universal Authorization Gate.
 Implements: Part II §2.1 — "Every inter-agent message and every tool/skill
@@ -1061,8 +1044,8 @@ class MessageInterceptor:
     # EMERGENCY BYPASS
     # ===================================================================
 
-    "src/aegis/warden/bypass.py": '''
-# src/aegis/warden/bypass.py
+    "aegis/warden/bypass.py": '''
+# aegis/warden/bypass.py
 """
 Emergency Bypass Manager.
 Implements: Part XIII, RT-4 — Warden SPOF Mitigation
@@ -1310,8 +1293,8 @@ class BypassManager:
     # WARDEN AGENT
     # ===================================================================
 
-    "src/aegis/agents/warden.py": '''
-# src/aegis/agents/warden.py
+    "aegis/agents/warden.py": '''
+# aegis/agents/warden.py
 """
 Warden Agent — Security Gatekeeper.
 Implements: Part II §2.1, Part VI §6.4
@@ -2206,7 +2189,7 @@ import pytest
 from aegis.agents.warden import WardenAgent
 from aegis.schemas.message import AegisMessage, MessageType
 from aegis.schemas.warden import WardenVerdict
-
+from aegis.warden.permission_model import PermissionModel
 
 def make_warden_message(action: str, payload: dict = None) -> AegisMessage:
     """Helper to create messages targeting the Warden."""
@@ -2224,11 +2207,15 @@ def make_warden_message(action: str, payload: dict = None) -> AegisMessage:
 @pytest.fixture
 def agent():
     """Create a WardenAgent with test configuration."""
+    # Create an instance of the real permission model
+    perm_model = PermissionModel()
+
     def resolver(tenant_id, user_id):
+        # Dynamically get permissions from the model, not hardcoded values
         if user_id == "root-user":
-            return {"*"}
+            return perm_model.get_role_permissions("root")
         elif user_id == "member-user":
-            return {"tool.execute", "skill.execute", "memory.read", "memory.write.own"}
+            return perm_model.get_role_permissions("member")
         return set()
 
     return WardenAgent(
