@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
   - `AgentID` and `TierName` enums for canonical identifiers.
 - **Agent Base Class:** `BaseAgent` abstract base class to enforce agent contracts.
 - **Configuration Loader:**
+
   - `AegisConfig` typed Pydantic model.
   - Loader supports `aegis_config.yaml`, environment variables (`AEGIS_*`), and defaults.
 - **Entry Point:** `aegis.main` stub that loads config and prints a banner.
