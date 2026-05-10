@@ -1,0 +1,4 @@
+# Additional dependencies for CHUNK-005: Observer Service
+# Append these to your existing requirements.txt
+structlog>=24.1.0
+aiohttp>=3.9.0
