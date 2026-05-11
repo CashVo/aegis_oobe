@@ -1,0 +1,86 @@
+# config/oracle_config_fragment.yaml
+# ──────────────────────────────────────────────────────────────────────
+# Merge this into your root aegis_config.yaml under the 'oracle:' key.
+# Implements: Part II §2.1 — Oracle configuration
+# ──────────────────────────────────────────────────────────────────────
+
+oracle:
+  # Maximum concurrent LLM requests across all providers
+  max_concurrent_requests: 8
+
+  # Default model preference (must match a key in 'models' below)
+  default_model: "llama3.2"
+
+  # ── Provider Configuration ──
+  providers:
+    ollama:
+      provider_type: "ollama"
+      base_url: "http://localhost:11434"
+      enabled: true
+      timeout_seconds: 120
+      max_concurrent: 4
+      max_retries: 3
+
+    openai:
+      provider_type: "openai_compat"
+      base_url: "https://api.openai.com/v1"
+      api_key_env: "OPENAI_API_KEY"
+      enabled: false
+      timeout_seconds: 60
+      max_concurrent: 4
+      max_retries: 3
+
+  # ── Model Registry ──
+  models:
+    llama3.2:
+      llm_id: "llama3.2"
+      provider: "ollama"
+      display_name: "Llama 3.2 (Local)"
+      context_window: 128000
+      preference_tags: ["local", "fast", "default"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    "llama3.1:70b":
+      llm_id: "llama3.1:70b"
+      provider: "ollama"
+      display_name: "Llama 3.1 70B (Local)"
+      context_window: 128000
+      preference_tags: ["local", "capable"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    nomic-embed-text:
+      llm_id: "nomic-embed-text"
+      provider: "ollama"
+      display_name: "Nomic Embed Text (Local)"
+      context_window: 8192
+      preference_tags: ["local", "embedding"]
+      supports_json_mode: false
+      supports_embeddings: true
+      max_output_tokens: 0
+
+  # ── Response Cache ──
+  cache:
+    enabled: true
+    db_path: "aegis_data/oracle_cache.db"
+    ttl_seconds: 3600
+    max_entries: 10000
+
+  # ── Rate Limiting ──
+  rate_limit:
+    enabled: true
+    max_requests_per_minute: 30
+    max_requests_per_hour: 500
+
+  # ── Token Budget ──
+  token_budget:
+    tokens_per_word: 1.35
+    safety_margin: 0.05
+
+  # ── Prompt Templates ──
+  templates:
+    default_system: "You are Aegis, an intelligent AI assistant. Be helpful, accurate, and concise."
+    custom: {}
