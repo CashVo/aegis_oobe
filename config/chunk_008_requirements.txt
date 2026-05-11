@@ -1,6 +1,0 @@
-# Additional dependencies for CHUNK-008: Oracle (LLM Gateway)
-# Append these to your project's requirements.txt / pyproject.toml
-httpx>=0.27.0
-aiosqlite>=0.20.0
-structlog>=24.1.0
-tiktoken>=0.7.0  # Optional: for accurate token counting (falls back to approximation)

@@ -144,7 +144,7 @@ Acceptance Criteria
 - ObserverAction protocol enum for bus communication
 - Full Pydantic schemas: HeartbeatEvent, LogEvent, MetricEvent, SystemHealthReport
 - Comprehensive test suite (5 test modules, 30+ test cases)
-```
+
 
 **Acceptance Criteria:**
 - [x] Observer agent subscribes to `aegis:stream:broadcast` and `aegis:stream:observer`
