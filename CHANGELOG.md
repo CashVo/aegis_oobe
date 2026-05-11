@@ -107,3 +107,66 @@ Acceptance Criteria
 - [x] Authentication with passphrase or local-trust mode
 - [x] AegisMessage envelope for all inter-agent communication (Part II, §2.2)
 - [x] Warden integration point ready (permissions exposed for consumption)
+
+## [0.5.0] — 2026-05-07
+### Added — CHUNK-005: Observer Service
+- ObserverAgent: Non-council agent for system-wide monitoring
+- Structured logging via structlog (JSON-formatted, contextual)
+- HeartbeatMonitor: Tracks agent liveness, detects failures, fires alerts
+- MetricsCollector: In-memory time-series aggregation with ring buffers
+- HealthServer: Lightweight aiohttp endpoint (/health, /health/ready, /health/live)
+- FallbackLogger: stderr JSON output when Observer is unavailable (RT-3 mitigation)
+- Self-monitoring heartbeat loop (RT-3: Observer Blind Spot addressed)
+- ObserverAction protocol enum for bus communication
+- Full Pydantic schemas: HeartbeatEvent, LogEvent, MetricEvent, SystemHealthReport
+- Comprehensive test suite (5 test modules, 30+ test cases)
+```
+
+**Acceptance Criteria:**
+- [x] Observer agent subscribes to `aegis:stream:broadcast` and `aegis:stream:observer`
+- [x] Structured logging with structlog (JSON, contextual fields: tenant_id, user_id, correlation_id, agent_id)
+- [x] Heartbeat monitoring with configurable thresholds (degraded → unresponsive)
+- [x] Health endpoint exposed via HTTP for Mission Control UI
+- [x] Self-monitoring via internal heartbeat loop
+- [x] Stderr fallback logging when Observer is down (RT-3 mitigation)
+- [x] Performance metrics collection (message latency, tool execution times)
+- [x] Alert callback system for health state transitions
+- [x] Inherits from BaseAgent (CHUNK-001), communicates via Redis bus (CHUNK-002)
+
+**Dependencies Used:** CHUNK-001 (schemas, BaseAgent), CHUNK-002 (Redis bus patterns)
+**New External Deps:** `structlog>=24.1.0`, `aiohttp>=3.9.0`
+
+
+## [0.6.0] — 2026-05-07
+### Added — CHUNK-006: Lexicon (Memory Control Plane)
+- Lexicon Agent with full message dispatch (assemble_context, store, search, promote, query_tier, session_end)
+- L0 Core Identity tier (YAML, user-editable only, cache with invalidation)
+- L1 Domain Knowledge tier (SQLite, keyword search, category filtering, deprecation)
+- L2 Workflow Calibration tier (SQLite, confidence scoring, reinforcement pattern)
+- L3 Episodic Memory tier (SQLite + FTS5 full-text search, append-only, retention eviction)
+- L4 Artifact Index tier (SQLite, metadata pointers, validation tracking)
+- L5 Session Scratchpad tier (Redis-backed with local cache fallback, TTL, snapshots)
+- Context Router: parallel tier queries, relevance ranking, token budget enforcement
+- Memory Governor: L5→L3 promotion pipeline, significance heuristics, eviction, L0 update suggestions
+- Storage manager: path resolution, SQLite schema init (WAL mode, indexes, FTS5 triggers)
+- Full test suite: 40+ unit/integration tests across all tiers, router, governor, and agent
+
+**What This Chunk Enables:**
+- Any agent can request assembled context from user memory (L0–L5) within a token budget
+- Memory CRUD operations scoped by tenant/user
+- Session lifecycle management (scratchpad → episodic promotion)
+- Foundation for UC-2 (context-aware responses using personal memory)
+- Foundation for UC-5 (user onboarding initializes memory tiers)
+- Ready for CHUNK-008 (Oracle) to consume context packets
+
+**Acceptance Criteria:**
+- [x] Lexicon agent handles all LexiconAction message types
+- [x] All 6 memory tiers (L0–L5) implemented with correct storage formats
+- [x] Context Router assembles multi-tier context within token budgets
+- [x] Memory Governor promotes L5→L3 at session end with significance filtering
+- [x] L0 is protected (user-editable only, agents can only suggest)
+- [x] L3 FTS5 full-text search operational
+- [x] L3 retention/eviction enforced
+- [x] Multi-tenant data isolation (all operations scoped by tenant_id + user_id)
+- [x] Storage auto-initialization for new users
+- [x] Tests pass for all tiers, router, governor, and agent integration
