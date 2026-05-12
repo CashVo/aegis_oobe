@@ -29,3 +29,7 @@ httpx>=0.27.0
 aiosqlite>=0.20.0
 structlog>=24.1.0
 tiktoken>=0.7.0  # Optional: for accurate token counting (falls back to approximation)
+
+# CHUNK 009: Forge
+aiofiles>=23.0
+#aiohttp>=3.9     # Already included in Chunk005

@@ -288,3 +288,38 @@ Acceptance Criteria
 
 **What This Enables**
 The Oracle is now the **live LLM inference backbone**. CHUNK-009 (The Forge) can route `invoke_oracle` calls through the bus, and CHUNK-010 (TOrchestrator) can dispatch user queries for AI-powered responses. The full QUERY → context-assembly → inference → cache pipeline is operational.
+
+-----
+
+## [0.9.0] - 2026-05-11
+
+### Added — CHUNK-009: The Forge (Execution)
+- **Forge Agent** (`src/aegis/forge/agent.py`) — Full BaseAgent implementation with message routing,
+  tool/skill dispatch, timeout handling, and structured response building.
+- **ForgeContext** (`src/aegis/forge/context.py`) — Runtime injection object giving Skills controlled
+  access to Tools, Oracle, and Lexicon without direct bus access.
+- **ToolRegistry & SkillRegistry** (`src/aegis/forge/registry.py`) — Auto-discovery, registration,
+  validation, and lookup for all executable units.
+- **11 OOBE Tools** (Part VIII §8.1): file_read, file_write, file_delete, dir_list, dir_create,
+  execute_shell_command, git_command, http_get, http_post, json_parse, schedule_job.
+- **6 OOBE Skills** (Part VIII §8.2): web_research, summarize_document, manage_git_workflow,
+  red_team_analysis, rlm_protocol, onboard_user.
+- **Forge Protocol Schemas** (`src/aegis/schemas/forge.py`) — ForgeAction, ForgeRequest, ForgeResponse.
+- **Comprehensive test suite** — 4 test modules covering tools, skills, agent, registry, and context.
+
+### Acceptance Criteria Met
+- [x] Forge agent subscribes to `aegis:stream:forge` and processes all ForgeAction types
+- [x] All 11 OOBE tools registered with valid ToolManifest and async execute()
+- [x] All 6 OOBE skills registered with valid SkillManifest and async execute(params, forge_context)
+- [x] ForgeContext provides invoke_tool(), invoke_oracle(), get_context() without direct bus access
+- [x] Shell command tool enforces local allowlist (secondary defense behind Warden)
+- [x] schedule_job tool produces valid ScheduledJob definitions for CHUNK-011
+- [x] manage_git_workflow skill handles full branch lifecycle with graceful remote-not-found handling
+- [x] Tool/Skill discovery via package introspection at startup
+- [x] UC-3 (File I/O), UC-4 (Git Workflow), UC-6 (Scheduling) infrastructure in place
+
+### Dependencies Added
+- `aiofiles>=23.0`
+- `aiohttp>=3.9`
+
+-----
