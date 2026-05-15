@@ -346,7 +346,7 @@ The Oracle is now the **live LLM inference backbone**. CHUNK-009 (The Forge) can
 - [x] Warden authorization enforced on all dispatches
 - [x] Supports UC-1 (simple Q), UC-2 (contextual Q), UC-5 (user mgmt), UC-6 (scheduling)
 
----
+====
 
 **Build Notes, Cash:**
 
@@ -364,3 +364,74 @@ Key architectural decisions in this chunk:
 
 -----
 
+## [0.11.0] - 2026-05-13
+### Added - CHUNK-011 delivers the nervous system and internal clock of Aegis. 
+
+- **System Manager** (`aegis.manager.system_manager`)
+  - Ordered startup: Redis → Observer → Warden → Identity → Lexicon → Janus → Oracle → Forge → TOrchestrator
+  - Graceful shutdown in reverse order with configurable timeouts
+  - Health-check polling loop with configurable interval
+  - Automatic agent restart with exponential backoff and retry limits
+  - First-run bootstrap detection (Part V §5.4)
+  - Signal handling (SIGINT, SIGTERM) for graceful shutdown
+  - `get_system_status()` / `get_agent_status()` introspection API
+  - Configuration loading: YAML → env var overrides → defaults (RT-2)
+
+- **Agent Registry** (`aegis.manager.agent_registry`)
+  - `AgentEntry` dataclass with dynamic import support
+  - Pre-configured registry for all 8 managed agents
+  - `get_startup_order()` / `get_shutdown_order()` utilities
+  - Warden highest restart priority (RT-4); Observer marked optional (RT-3)
+
+- **Aegis Scheduler** (`aegis.manager.scheduler`)
+  - APScheduler 4.x async backend with SQLite data store
+  - Asyncio-based fallback scheduler when APScheduler unavailable
+  - Persistent `JobStore` with full CRUD operations
+  - Job fire callback: constructs AegisMessage → publishes to Redis bus
+  - Module-level singleton accessor for tool integration
+  - Support for cron, interval, and one-time (date) triggers
+
+- **schedule_job Tool** (`aegis.forge.tools.schedule_job`)
+  - Standard Forge tool interface (ToolManifest + execute)
+  - Validates ScheduledJob via Pydantic before registration
+  - Permission-gated: requires `scheduler.manage`
+
+- **Schemas** (`aegis.schemas.scheduler`)
+  - `ScheduledJob` model with field validators per trigger type
+  - `SchedulerRequest` / `SchedulerResponse` envelopes
+  - `ScheduleType`, `SchedulerAction` enums
+  - `JobSummary` lightweight view model
+
+- **Entry Point** (`aegis.main`, `aegis.__main__`)
+  - `python -m aegis.main` / `python -m aegis` launches full system
+  - Structured logging via structlog (Part III §3.2)
+
+### Acceptance Criteria
+- [x] System Manager starts Redis → agents in correct order
+- [x] System Manager shuts down in reverse order
+- [x] Health checks detect failed agents
+- [x] Failed agents are restarted with exponential backoff
+- [x] Scheduler registers, persists, and fires jobs
+- [x] Fired jobs publish AegisMessage to Redis bus
+- [x] schedule_job tool validates and registers via Scheduler
+- [x] First-run bootstrap detection implemented
+- [x] Configuration precedence: CLI > ENV > YAML > defaults
+
+### Here's what it enables:
+
+| Deliverable | Spec Section | What It Does |
+|---|---|---|
+| **SystemManager** | Part III §3.3 | Ordered startup/shutdown of all 8 agents, health polling, auto-restart with exponential backoff, signal handling, first-run bootstrap detection |
+| **AgentRegistry** | Part III §3.3 | Configuration-driven agent manifest with dynamic import, priority ordering, and per-agent restart limits |
+| **AegisScheduler** | Part XI §11.1–§11.3 | APScheduler 4.x backend + asyncio fallback, SQLite-persisted JobStore, job-fire → AegisMessage → Redis bus pipeline |
+| **schedule_job Tool** | Part VIII §8.1 | Standard Forge tool for programmatic job registration (Warden-gated: `scheduler.manage`) |
+| **Entry Point** | Part III §3.3 | `python -m aegis.main` boots the full system with structured logging |
+
+**Red Team mitigations baked in:**
+- **RT-2** — Config precedence enforced: CLI > ENV > YAML > defaults
+- **RT-3** — Observer marked optional; system degrades gracefully
+- **RT-4** — Warden gets 5 restart attempts (highest of any agent), queued messages during downtime
+
+**OOBE Criteria advanced:** UC-6 (Task Scheduling) now has a complete pipeline from user intent → ScheduledJob → Scheduler → AegisMessage → Redis bus.
+
+-----

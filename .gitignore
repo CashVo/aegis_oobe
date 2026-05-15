@@ -30,3 +30,6 @@ Thumbs.db
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Aegis: None tracking - these files and folders should not be checked into any repo
+aegis_data/

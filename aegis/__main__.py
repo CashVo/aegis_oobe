@@ -1,7 +1,13 @@
-# File: aegis/__main__.py
-# Purpose: Enables `python -m aegis` execution by forwarding to the main CLI app.
+# aegis/__main__.py
+"""
+Allows running the Aegis system with:
 
-from aegis.main import cli_app
+    python -m aegis
+
+Delegates to aegis.main.main().
+"""
+
+from aegis.main import main
 
 if __name__ == "__main__":
-    cli_app()
+    main()
