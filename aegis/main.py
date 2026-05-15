@@ -1,72 +1,90 @@
-# File: aegis/main.py
-# Purpose: Entry point stub. Loads config, prints banner, exits.
+# aegis/main.py
+# Implements: Part III §3.3 — Entry Point
+"""
+Aegis System Entry Point.
+
+Launches the System Manager, which bootstraps Redis, the Scheduler,
+and all council agents in the correct dependency order.
+
+Usage::
+
+    python -m aegis.main
+    # or
+    python -m aegis
+
+Configuration is loaded from ``aegis_config.yaml`` in the current
+working directory. Override with env vars (see SystemManager docs).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import sys
 
 import structlog
-import typer
-from rich.console import Console
-from rich.panel import Panel
 
-from aegis.config import AegisConfig, load_config
 
-# Initialize a rich console for pretty printing
-console = Console()
+def configure_logging(level: str = "INFO") -> None:
+    """
+    Configure structured logging for the Aegis system.
 
-# Configure structured logging
-log = structlog.get_logger()
-
-# Create the Typer CLI application
-cli_app = typer.Typer(name="aegis")
-
-@cli_app.command()
-def main(
-    config_file: str = typer.Option(
-        "aegis_config.yaml",
-        "--config",
-        "-c",
-        help="Path to the YAML configuration file.",
+    Uses structlog for JSON-formatted, contextual logging as specified
+    in Part III §3.2 (Observer Service logging requirements).
+    """
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.StackInfoRenderer(),
+            structlog.dev.set_exc_info,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.dev.ConsoleRenderer(colors=True),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(
+            getattr(logging, level.upper(), logging.INFO)
+        ),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
     )
-):
-    """
-    Initializes and runs the Aegis System.
 
-    This is the main entry point which will eventually start the System Manager
-    and all configured agents. For now, it just loads configuration and
-    displays a startup banner.
+    # Also configure stdlib logging for third-party libraries
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        level=getattr(logging, level.upper(), logging.INFO),
+        stream=sys.stderr,
+    )
+
+
+def main() -> None:
     """
+    Main entry point for the Aegis system.
+
+    Configures logging, creates the SystemManager, and runs it
+    until a shutdown signal is received.
+    """
+    configure_logging()
+    log = structlog.get_logger("aegis.main")
+
+    log.info("=" * 60)
+    log.info("  PROJECT AEGIS — Initializing")
+    log.info("=" * 60)
+
+    from aegis.manager.system_manager import SystemManager
+
+    manager = SystemManager()
+
     try:
-        config = load_config(config_file)
-        _print_banner(config)
-    except FileNotFoundError:
-        console.print(f"[bold red]Error:[/bold red] Configuration file not found at '{config_file}'.")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        console.print(f"[bold red]An unexpected error occurred during startup:[/bold red]\n{e}")
-        log.exception("Startup failed")
-        raise typer.Exit(code=1)
+        asyncio.run(manager.run())
+    except KeyboardInterrupt:
+        log.info("Aegis shutdown via KeyboardInterrupt")
+    except Exception as exc:
+        log.critical("Aegis fatal error: %s", exc, exc_info=True)
+        sys.exit(1)
 
-    log.info("Aegis startup sequence complete (CHUNK-001 stub). Exiting.")
+    log.info("Aegis has exited cleanly.")
 
-def _print_banner(config: AegisConfig):
-    """Prints a startup banner with key configuration details."""
-    banner_text = (
-        f"[bold cyan]Project Aegis[/bold cyan] [dim]v{config.version}[/dim]\n"
-        f"Local-First Multi-Agent System\n"
-        f"—"
-    )
-    config_details = (
-        f" • [b]Log Level:[/b] {config.log_level}\n"
-        f" • [b]Data Dir:[/b]  {config.data_dir}\n"
-        f" • [b]Redis:[/b]      {config.redis.host}:{config.redis.port}\n"
-    )
-    panel_content = f"{banner_text}\n{config_details}"
-    console.print(
-        Panel(
-            panel_content,
-            title="[yellow]SYSTEM BOOT[/yellow]",
-            border_style="blue",
-            expand=False,
-        )
-    )
 
 if __name__ == "__main__":
-    cli_app()
+    main()

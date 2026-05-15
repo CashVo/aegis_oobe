@@ -107,3 +107,25 @@ oracle:
   templates:
     default_system: "You are Aegis, an intelligent AI assistant. Be helpful, accurate, and concise."
     custom: {}
+
+# System Manager configuration
+system_manager:
+  # Seconds between health check sweeps
+  health_check_interval_seconds: 30
+  # Max restart attempts before declaring agent failure
+  restart_max_retries: 3
+  # Exponential backoff base (seconds) for restarts
+  restart_backoff_base_seconds: 2.0
+  # Maximum backoff cap (seconds)
+  restart_backoff_max_seconds: 60.0
+  # Timeout for agent startup() calls
+  startup_timeout_seconds: 30
+  # Timeout for agent shutdown() calls
+  shutdown_timeout_seconds: 15
+
+# Scheduler configuration
+scheduler:
+  # Enable/disable the scheduler service
+  enabled: true
+  # Path to the SQLite job store database
+  job_store_path: "aegis_data/scheduler_jobs.db"
