@@ -1,0 +1,153 @@
+/* Aegis Mission Control — Stylesheet */
+/* Dark theme with accent colors for a "mission control" aesthetic */
+
+:root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-input: #21262d;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Navbar ─────────────────────────────────── */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 2rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+}
+.nav-brand a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+.nav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--accent); }
+
+/* ── Container ──────────────────────────────── */
+.container {
+    max-width: 1100px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+    flex: 1;
+    width: 100%;
+}
+
+/* ── Typography ─────────────────────────────── */
+h1 { font-size: 1.75rem; margin-bottom: 1rem; color: var(--text); }
+h2 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; color: var(--text-muted); }
+p { margin-bottom: 0.5rem; }
+code { background: var(--bg-input); padding: 0.15em 0.4em; border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; }
+.muted { color: var(--text-muted); font-size: 0.85rem; }
+
+/* ── Status Grid ────────────────────────────── */
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.status-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+.status-card h3 { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+.status-card p { font-size: 1.25rem; font-weight: 600; }
+.status-ok p { color: var(--green); }
+.status-err p { color: var(--red); }
+
+/* ── Tables ─────────────────────────────────── */
+.data-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1.5rem; }
+.data-table th, .data-table td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.data-table th { color: var(--text-muted); font-weight: 600; }
+.data-table tr:hover { background: var(--bg-input); }
+
+/* ── Badges ─────────────────────────────────── */
+.badge { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-muted); }
+.badge-ok { background: rgba(63,185,80,0.15); color: var(--green); }
+.badge-warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+
+/* ── Alerts ─────────────────────────────────── */
+.alert { background: rgba(88,166,255,0.1); border: 1px solid var(--accent); border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.9rem; }
+
+/* ── Forms ──────────────────────────────────── */
+input[type="text"], input[type="email"], select, textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+button, .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+button:hover { opacity: 0.85; }
+.btn-danger { background: var(--red); }
+.form-inline { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.form-stack { display: flex; flex-direction: column; gap: 0.5rem; max-width: 500px; margin-bottom: 1rem; }
+.search-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+.search-form input[type="text"] { flex: 1; }
+
+/* ── Chat ───────────────────────────────────── */
+.chat-container { display: flex; flex-direction: column; height: 60vh; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-card); }
+.chat-messages { flex: 1; overflow-y: auto; padding: 1rem; }
+.chat-msg { margin-bottom: 0.75rem; font-size: 0.9rem; line-height: 1.5; }
+.chat-msg.user strong { color: var(--accent); }
+.chat-msg.agent strong { color: var(--green); }
+.chat-msg.error strong { color: var(--red); }
+.chat-meta { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; padding-left: 1rem; }
+.chat-input-bar { display: flex; border-top: 1px solid var(--border); }
+.chat-input-bar input { flex: 1; border: none; border-radius: 0; background: var(--bg-input); }
+.chat-input-bar button { border-radius: 0; }
+
+/* ── Memory Fragments ───────────────────────── */
+.memory-fragment { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+.fragment-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+.fragment-content { font-size: 0.9rem; white-space: pre-wrap; }
+
+/* ── Log Viewer ─────────────────────────────── */
+.log-controls { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem; }
+.log-controls label { font-size: 0.85rem; color: var(--text-muted); }
+.log-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; height: 55vh; overflow-y: auto; padding: 0.75rem; font-family: var(--font-mono); font-size: 0.8rem; }
+.log-entry { padding: 0.15rem 0; border-bottom: 1px solid rgba(48,54,61,0.5); }
+.log-ts { color: var(--text-muted); }
+.log-src { color: var(--accent); }
+.log-level { font-weight: 700; min-width: 60px; display: inline-block; }
+.log-debug .log-level { color: var(--text-muted); }
+.log-info .log-level { color: var(--green); }
+.log-warning .log-level { color: var(--yellow); }
+.log-error .log-level, .log-critical .log-level { color: var(--red); }
+
+/* ── Footer ─────────────────────────────────── */
+.footer { text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 2rem; }

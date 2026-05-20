@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Logs · Aegis{% endblock %}
+{% block content %}
+<h1>System Logs</h1>
+<div class="log-controls">
+    <button id="btn-clear" onclick="clearLogs()">Clear</button>
+    <label><input type="checkbox" id="auto-scroll" checked /> Auto-scroll</label>
+    <select id="level-filter" onchange="applyFilter()">
+        <option value="all">All Levels</option>
+        <option value="debug">Debug+</option>
+        <option value="info">Info+</option>
+        <option value="warning">Warning+</option>
+        <option value="error">Error+</option>
+    </select>
+</div>
+<div id="log-container" class="log-container"></div>
+<div id="log-status" class="muted">Connecting…</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const logContainer = document.getElementById("log-container");
+    const statusEl = document.getElementById("log-status");
+    const LEVELS = ["debug", "info", "warning", "error", "critical"];
+
+    let ws = null;
+    function connect() {
+        ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
+        ws.onopen = () => { statusEl.textContent = "Streaming logs…"; };
+        ws.onclose = () => { statusEl.textContent = "Disconnected."; };
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "log") {
+                addLogEntry(data);
+            }
+        };
+    }
+
+    function addLogEntry(entry) {
+        const div = document.createElement("div");
+        div.className = "log-entry log-" + (entry.level || "info");
+        div.dataset.level = entry.level || "info";
+        const ts = entry.timestamp ? entry.timestamp.substring(11, 19) : "--:--:--";
+        div.innerHTML = `<span class="log-ts">${ts}</span> <span class="log-src">[${entry.source || "?"}]</span> <span class="log-level">${(entry.level || "info").toUpperCase()}</span> ${escapeHtml(entry.message || "")}`;
+        logContainer.appendChild(div);
+        applyFilter();
+        if (document.getElementById("auto-scroll").checked) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    }
+
+    function clearLogs() { logContainer.innerHTML = ""; }
+
+    function applyFilter() {
+        const minLevel = document.getElementById("level-filter").value;
+        const minIdx = minLevel === "all" ? -1 : LEVELS.indexOf(minLevel);
+        logContainer.querySelectorAll(".log-entry").forEach(el => {
+            const lvl = LEVELS.indexOf(el.dataset.level);
+            el.style.display = (minIdx === -1 || lvl >= minIdx) ? "" : "none";
+        });
+    }
+
+    function escapeHtml(t) {
+        const d = document.createElement("div");
+        d.textContent = t;
+        return d.innerHTML;
+    }
+
+    connect();
+</script>
+{% endblock %}

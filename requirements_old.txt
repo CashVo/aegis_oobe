@@ -2,7 +2,7 @@
 # Purpose: Pinned/compatible-release deps for reproducible environments.
 # Generated from pyproject.toml. Use `pip install -r requirements.txt`.
 
-pydantic==2.7.1
+pydantic>=2.7.1,<3.0.0
 pyyaml==6.0.1
 structlog==24.1.0
 typer==0.12.3
@@ -10,8 +10,6 @@ redis==5.0.4
 fastapi==0.111.0
 uvicorn==0.29.0
 apscheduler==3.10.4
-# mcp is a placeholder, assuming a version
-# mcp==1.0.0
 
 # CHUNK-004: Identity Agent
 aiosqlite>=0.19.0
@@ -43,3 +41,18 @@ aiofiles>=23.0
 # aiosqlite>=0.19.0       # Async SQLite for JobStore
 # apscheduler>=4.0.0a5    # Async-native job scheduler (v4.x)
 # pyyaml>=6.0             # Config file parsing (aegis_config.yaml)
+
+# CHUNK-012: CLI / UI
+
+# CLI
+#typer[all]>=0.12.0
+#pyyaml>=6.0
+
+# Web UI
+#fastapi>=0.111.0
+#uvicorn[standard]>=0.30.0
+jinja2>=3.1.4
+python-multipart>=0.0.9
+
+# MCP Server
+mcp>=1.0.0
