@@ -129,3 +129,22 @@ scheduler:
   enabled: true
   # Path to the SQLite job store database
   job_store_path: "aegis_data/scheduler_jobs.db"
+
+# CLI / UI
+web:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8420
+  cors_origins:
+    - "http://localhost:8420"
+    - "http://127.0.0.1:8420"
+
+mcp:
+  enabled: true
+  transport: "stdio"  # "stdio" or "sse"
+  # sse_port: 8421   # Only used if transport is "sse"
+
+cli:
+  default_tenant: "default"
+  default_user: "root"
+  default_config: "aegis_config.yaml"

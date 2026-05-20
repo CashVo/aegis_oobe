@@ -1,0 +1,76 @@
+# aegis/cli/commands/start.py
+# Implements: Part X, §10.1 — `aegis start`
+"""
+Start the Aegis system via System Manager.
+"""
+
+import asyncio
+import typer
+from typing import Annotated
+
+
+def start(
+    config: Annotated[str, typer.Option(
+        "--config", "-c",
+        help="Path to the Aegis configuration file.",
+    )] = "aegis_config.yaml",
+
+    web: Annotated[bool, typer.Option(
+        help="Enable or disable the Mission Control Web UI.",
+    )] = True,
+
+    web_port: Annotated[int, typer.Option(
+        "--port", "-p",
+        help="Port for the Mission Control Web UI.",
+    )] = 8420,
+
+) -> None:
+    """Start the Aegis system (System Manager bootstrap)."""
+    typer.echo("═══════════════════════════════════════")
+    typer.echo("  Project Aegis — Starting System")
+    typer.echo("═══════════════════════════════════════")
+    typer.echo(f"  Config : {config}")
+    typer.echo(f"  Web UI : {'enabled' if web else 'disabled'}")
+    if web:
+        typer.echo(f"  Port   : {web_port}")
+    typer.echo("")
+
+    from aegis.manager.system_manager import SystemManager
+    from aegis.config import load_config
+
+    cfg = load_config(config)
+
+    async def _run() -> None:
+        manager = SystemManager(cfg)
+        try:
+            await manager.startup()
+            typer.echo("[✓] All agents online. System ready.")
+            if web:
+                typer.echo(f"[✓] Mission Control → http://localhost:{web_port}")
+                # Launch web server alongside agent loop
+                from aegis.web.app import create_app
+                import uvicorn
+
+                web_app = create_app(cfg)
+                web_config = uvicorn.Config(
+                    web_app,
+                    host="0.0.0.0",
+                    port=web_port,
+                    log_level="info",
+                )
+                server = uvicorn.Server(web_config)
+                await server.serve()
+            else:
+                # Block until interrupted
+                while True:
+                    await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            typer.echo("\n[…] Shutting down gracefully…")
+        finally:
+            await manager.shutdown()
+            typer.echo("[✓] Aegis stopped.")
+
+    try:
+        asyncio.run(_run())
+    except KeyboardInterrupt:
+        pass

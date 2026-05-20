@@ -67,33 +67,49 @@ DEFAULT_CONFIG = {
 }
 
 
-def _load_config(config_path: str = "aegis_config.yaml") -> Dict[str, Any]:
+def _load_config(config_path: Union[str, bytes, os.PathLike, Dict[str, Any]] = "aegis_config.yaml") -> Dict[str, Any]:
     """
-    Load system configuration from aegis_config.yaml.
+    Load system configuration from aegis_config.yaml or accept a pre-loaded configuration dictionary.
 
     Falls back to DEFAULT_CONFIG if file is missing.
     Env vars override: AEGIS_REDIS_HOST, AEGIS_REDIS_PORT, etc.
     Precedence: CLI > ENV > YAML > defaults  (RT-2)
     """
-    config = dict(DEFAULT_CONFIG)
+    # 1. Check if the input is already a dictionary structure (pre-loaded configuration)
+    if isinstance(config_path, dict):
+        logger.info("Configuration supplied directly as a pre-loaded dictionary.")
+        config = dict(DEFAULT_CONFIG)
+        _deep_merge(config, config_path)
+    
+    # 2. Check if the input is an object containing a state layout structure (like AegisConfig)
+    elif not isinstance(config_path, (str, bytes, os.PathLike)):
+        logger.info("Configuration supplied as an object configuration structure.")
+        config = dict(DEFAULT_CONFIG)
+        # Attempt to pull dictionary properties out of the configuration object structure safely
+        obj_dict = getattr(config_path, "__dict__", {}) or getattr(config_path, "model_dump", lambda: {})()
+        _deep_merge(config, obj_dict)
 
-    if os.path.exists(config_path):
-        try:
-            import yaml
+    # 3. Otherwise, treat it as a filesystem destination target layout path string [1]
+    else:
+        config = dict(DEFAULT_CONFIG)
 
-            with open(config_path, "r") as f:
-                file_config = yaml.safe_load(f) or {}
-            _deep_merge(config, file_config)
-            logger.info("Loaded config from %s", config_path)
-        except ImportError:
-            logger.warning(
-                "PyYAML not installed — using default config. "
-                "Install with: pip install pyyaml"
-            )
-        except Exception as exc:
-            logger.warning("Failed to load %s: %s — using defaults", config_path, exc)
+        if os.path.exists(config_path):
+            try:
+                import yaml
 
-    # Env var overrides
+                with open(config_path, "r") as f:
+                    file_config = yaml.safe_load(f) or {}
+                _deep_merge(config, file_config)
+                logger.info("Loaded config from %s", config_path)
+            except ImportError:
+                logger.warning(
+                    "PyYAML not installed — using default config. "
+                    "Install with: pip install pyyaml"
+                )
+            except Exception as exc:
+                logger.warning("Failed to load %s: %s — using defaults", config_path, exc)
+
+    # Env var overrides (Precedence rules remain intact)
     env_overrides = {
         "AEGIS_REDIS_HOST": ("redis", "host"),
         "AEGIS_REDIS_PORT": ("redis", "port"),
@@ -240,7 +256,7 @@ class SystemManager:
         self._shutdown_event.set()
 
     # -- Startup Sequence ----------------------------------------------------
-
+    
     async def start(self) -> None:
         """
         Execute the full startup sequence.
@@ -281,6 +297,13 @@ class SystemManager:
         # Step 5: First-run bootstrap check
         await self._check_first_run()
 
+    async def startup(self) -> None:
+        """
+        Public lifecycle entry point required by the CLI bootstrap.
+        Redirects directly to the core ordered startup sequence.
+        """
+        await self.start()
+        
     async def _verify_redis(self) -> None:
         """
         Verify Redis connectivity before launching any agents.
@@ -291,9 +314,16 @@ class SystemManager:
         try:
             import redis.asyncio as aioredis
 
-            host = self._redis_config.get("host", "localhost")
-            port = self._redis_config.get("port", 6379)
-            db = self._redis_config.get("db", 0)
+            # Safe extraction: Uses dot-notation for objects, or falls back to .get() if it's a dict
+            if isinstance(self._redis_config, dict):
+                host = self._redis_config.get("host", "localhost")
+                port = self._redis_config.get("port", 6379)
+                db = self._redis_config.get("db", 0)
+            else:
+                # Read attributes directly from the RedisConfig object structure
+                host = getattr(self._redis_config, "host", "localhost")
+                port = getattr(self._redis_config, "port", 6379)
+                db = getattr(self._redis_config, "db", 0)
 
             self._redis_conn = aioredis.Redis(host=host, port=port, db=db)
             pong = await self._redis_conn.ping()
@@ -314,6 +344,7 @@ class SystemManager:
                 exc,
             )
             raise SystemExit(1)
+
 
     async def _start_scheduler(self) -> None:
         """Initialize and start the Aegis Scheduler service."""
@@ -408,6 +439,14 @@ class SystemManager:
 
     # -- Shutdown Sequence ---------------------------------------------------
 
+    async def shutdown(self) -> None:
+        """
+        Public lifecycle method invoked by the CLI bootstrap.
+        Acts as a direct alias for the core stop sequence.
+        """
+        logger.info("[Manager] Init shutdown sequence interface...")
+        await self.stop()
+    
     async def stop(self) -> None:
         """
         Execute graceful shutdown in reverse startup order.

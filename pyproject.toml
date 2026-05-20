@@ -1,5 +1,5 @@
 # File: pyproject.toml
-# Purpose: PEP 621 metadata, dependencies, and CLI entry point for Aegis.
+# Purpose: PEP 621 metadata, dependencies, and entry points for Aegis.
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -8,46 +8,60 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aegis-system"
 version = "0.1.0"
-authors = [
-  { name="Cash Vo", email="cash.vo@gmail.com" },
-]
 description = "A local-first, multi-agent AI system."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+authors = [
+  { name = "Cash Vo", email = "cashvo@gmail.com" },
 ]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Base = core runtime (CLI-friendly). Web + MCP are extras.
 dependencies = [
-    "pydantic>=2.7,<3.0",
-    "pyyaml>=6.0",
-    "structlog>=24.1",
-    "typer[all]>=0.12",
-    "redis>=5.0",
-    "fastapi>=0.111",
-    "uvicorn[standard]>=0.29",
-    "apscheduler>=3.10",
-    "mcp>=1.0", # Placeholder for Model Context Protocol
+  "pydantic>=2.11.0,<3.0.0",
+  "structlog>=24.1",
+  "pyyaml>=6.0",
+  "click==8.1.7",
+  "typer>=0.9.0",
+  "redis>=5.0",
+  "apscheduler>=3.10",
 ]
 
 [project.optional-dependencies]
+# Local development tooling
 dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.23",
-    "ruff>=0.4",
-    "mypy>=1.9"
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.4",
+  "mypy>=1.9",
+]
+
+# Web/API stack (only if you run the server)
+web = [
+  "fastapi>=0.111,<1.0",
+  "uvicorn[standard]>=0.30.0",
+  "jinja2>=3.1.4",
+  "python-multipart>=0.0.13",
+]
+
+# MCP stack (only if you run the MCP server/client)
+mcp = [
+  "mcp>=1.27.0,<2.0",
 ]
 
 [project.scripts]
-aegis = "aegis.main:cli_app"
+aegis = "aegis.cli.main:main"
+aegis-mcp = "aegis.mcp.server:main"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
@@ -59,3 +73,15 @@ exclude = ["tests*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+
+# How to run installation
+#
+# Dev (editable) + tooling: 
+# pip install -e ".[dev]"
+#
+# Dev + web + mcp:  
+# pip install -e ".[dev,web,mcp]"
+#
+# Upgrade installed packages:
+# pip install --upgrade -e ".[dev,cli,web,mcp]"
