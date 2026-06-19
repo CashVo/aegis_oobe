@@ -551,3 +551,69 @@ The infrastructure for a deliberately engineered system is built. Time to boot i
 
 -----
 
+## [0.13.0] - 2026-05-27
+
+### Added — CHUNK-013: Bootstrap (Boot, Restart, Shutdown, First-run-experience)
+
+| Field | Value |
+|-------|-------|
+| Chunk | CHUNK-013 |
+| Name | First Run Experience & System Launchers |
+| Version | `v0.13.0` |
+| Files | 14 production + 3 test modules |
+| Dependencies | CHUNK-011, CHUNK-012 |
+
+### What This Chunk Enables
+
+- **Cold boot to operational** in a single command (`python scripts/aegis_boot.py`)
+- **Interactive FRX wizard** — configures LLM, embedding, Redis, Identity, and Lexicon on first run
+- **Full lifecycle management** — boot, shutdown, restart, status scripts with idempotent behavior
+- **Web server lifecycle** — Mission Control starts after agents (Step 6) and stops before agents on shutdown (Step 1)
+- **Security-first bootstrap** — PBKDF2-HMAC-SHA256 passphrase hashing, atomic PID writes, stale PID detection
+- **Cross-platform** — macOS/Linux native, Windows via WSL
+
+### Acceptance Criteria Checklist
+
+- [x] `aegis_boot.py` starts Redis, verifies deps, launches SM + Web, confirms health
+- [x] `aegis_shutdown.py` stops Web → SM → Redis in correct reverse order
+- [x] `aegis_restart.py` performs shutdown→boot with health verification
+- [x] FRX triggers on missing config/data, runs interactive wizard
+- [x] All scripts are idempotent (boot when running = safe, shutdown when stopped = safe)
+- [x] Structured JSON logging to `logs/aegis_launcher.log`
+- [x] Web server has explicit lifecycle in both boot and shutdown sequences
+- [x] Unit tests cover PID management, prerequisites, bootstrap, and port checking
+
+### Integrations
+
+**Chat Workflow**
+User types in /chat → WebSocket
+  → [bus.publish](https://bus.publish)("aegis:stream:torchestrator", msg with response_channel)
+    → MessageSubscriber reads from stream
+      → bus_handler() calls [TOrchestrator.handle](https://TOrchestrator.handle)_message(msg)
+        → process_request() → chat() → _process_user_message()
+          → IntentParser classifies
+          → TaskDecomposer creates plan
+          → [MessageRouter.execute](https://MessageRouter.execute)_step() → publishes to aegis:stream:oracle
+            → Oracle's subscriber reads → [Oracle.handle](https://Oracle.handle)_message() → returns response
+              → SM bridge publishes Oracle response back to torchestrator
+                → TOrchestrator's router resolves pending future
+          → ResponseSynthesizer formats answer
+        → Returns AegisMessage response
+      → bus_handler() publishes to response_channel
+        → Web's consume() reads from response_channel
+          → WebSocket sends response to browser ✅
+		  
+**Chat Message Full Lifecycle**
+1. Web → aegis:stream:torchestrator (message with response_channel)
+2. Subscriber reads → spawns task → read loop FREE ✅
+3. Task: handle_message() → process_request() → chat()
+4.   → Router publishes to aegis:stream:oracle
+5.   → Router awaits future (Oracle response)
+6. Oracle subscriber reads → Oracle processes → returns response
+7. Oracle bus_handler publishes to aegis:stream:torchestrator
+8. TOrchestrator subscriber reads Oracle's response (read loop is free!) ✅
+9.   → spawns task → handle_message() sees RESPONSE type
+10.  → router.handle_incoming_response() → resolves future ✅
+11. Step 5 unblocks → response synthesized → AegisMessage returned
+12. _process_message() publishes to response_channel ✅
+13. Web's consume() reads it → WebSocket sends to browser ✅

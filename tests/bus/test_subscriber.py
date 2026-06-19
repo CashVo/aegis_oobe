@@ -7,7 +7,7 @@ Tests for the Message Subscriber.
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone, timedelta
+from aegis.utils.time import utcnow, timedelta
 
 from aegis.bus.subscriber import MessageSubscriber
 from aegis.schemas.message import AegisMessage, MessageType, Priority
@@ -142,7 +142,7 @@ class TestMessageSubscriber:
             user_id="u",
             action="test",
             ttl_seconds=300,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=utcnow(),
         )
         assert subscriber._is_expired(msg) is False
 
@@ -156,7 +156,7 @@ class TestMessageSubscriber:
             user_id="u",
             action="test",
             ttl_seconds=60,
-            timestamp=datetime.now(timezone.utc) - timedelta(seconds=120),
+            timestamp=utcnow() - timedelta(seconds=120),
         )
         assert subscriber._is_expired(msg) is True
 

@@ -49,6 +49,7 @@ aegis/bus/__init__.py
 aegis/bus/connection.py
 aegis/bus/constants.py
 aegis/bus/publisher.py
+aegis/bus/redis_bus.py
 aegis/bus/subscriber.py
 aegis/cli/__init__.py
 aegis/cli/main.py
@@ -89,6 +90,11 @@ aegis/forge/tools/http_get.py
 aegis/forge/tools/http_post.py
 aegis/forge/tools/json_parse.py
 aegis/forge/tools/schedule_job.py
+aegis/frx/__init__.py
+aegis/frx/bootstrap.py
+aegis/frx/checks.py
+aegis/frx/wizard.py
+aegis/frx/templates/__init__.py
 aegis/identity/__init__.py
 aegis/identity/bootstrap.py
 aegis/identity/constants.py

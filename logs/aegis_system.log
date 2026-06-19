@@ -1,0 +1,433 @@
+2026-06-05T03:48:59.938125Z [info     ] ============================================================
+2026-06-05T03:48:59.938125Z [info     ]   PROJECT AEGIS — Initializing
+2026-06-05T03:48:59.938125Z [info     ] ============================================================
+2026-06-05T03:49:00.176626Z [info     ] Loaded config from aegis_config.yaml
+2026-06-05T03:49:00.177636Z [info     ] ============================================================
+2026-06-05T03:49:00.177636Z [info     ]   AEGIS SYSTEM MANAGER — STARTUP SEQUENCE
+2026-06-05T03:49:00.177636Z [info     ] ============================================================
+2026-06-05T03:49:00.177636Z [info     ] [Redis] Verifying connectivity...
+2026-06-05T03:49:00.183844Z [info     ] [Redis] Connected to 127.0.0.1:6379 (db=0, pool=50)
+2026-06-05T03:49:00.183844Z [info     ] [Scheduler] Starting...       
+2026-06-04 20:49:00,197 [INFO] aegis.manager.scheduler: JobStore initialized at aegis_data/scheduler_jobs.db
+2026-06-04 20:49:00,197 [WARNING] aegis.manager.scheduler: APScheduler not available — using asyncio fallback scheduler. Install with: pip install apscheduler>=4.0
+2026-06-04 20:49:00,204 [INFO] aegis.manager.scheduler: Reloaded 0 enabled jobs from store
+2026-06-04 20:49:00,204 [INFO] aegis.manager.scheduler: AegisScheduler is running (fallback=True)
+2026-06-05T03:49:00.204555Z [info     ] [Scheduler] Running (store=aegis_data/scheduler_jobs.db)
+2026-06-05T03:49:00.204555Z [info     ] [Observer Service] Starting... agent_id=observer
+2026-06-05T03:49:00.565405Z [info     ] observer_startup               agent_id=observer message='Observer Agent starting up.'
+2026-06-05T03:49:00.565405Z [info     ] Health endpoint available at http://127.0.0.1:8421/health agent_id=observer
+2026-06-05T03:49:00.565405Z [info     ] Observer Agent startup complete. agent_id=observer
+2026-06-05T03:49:00.565405Z [info     ] [Observer Service] Started successfully agent_id=observer
+2026-06-04 20:49:00,565 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:observer' on stream 'aegis:stream:observer'.
+2026-06-04 20:49:00,565 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:observer', group='aegis:group:observer', consumer='observer-consumer-1'
+2026-06-04 20:49:00,565 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:observer' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:00,565 [INFO] aegis.bus.subscriber: Subscriber 'observer' started (2 read loop(s)).
+2026-06-05T03:49:00.565405Z [info     ] [Bus] Agent 'observer' wired to stream (non-blocking)
+2026-06-05T03:49:00.565405Z [info     ] [Warden (Security)] Starting... agent_id=warden
+2026-06-04 20:49:00,579 [INFO] aegis.warden.permission_model: PermissionModel initialized
+2026-06-04 20:49:00,579 [INFO] aegis.warden.allowlist: AllowlistEngine initialized
+2026-06-04 20:49:00,579 [INFO] aegis.warden.bypass: BypassManager initialized
+2026-06-04 20:49:00,579 [INFO] aegis.warden.interceptor: MessageInterceptor initialized.
+2026-06-04 20:49:00,579 [INFO] aegis.agents.warden: WardenAgent initialized.
+2026-06-04 20:49:00,579 [INFO] aegis.agents.warden: Warden agent starting up
+2026-06-04 20:49:00,579 [INFO] aegis.agents.warden: Warden agent ready. Security enforcement active.
+2026-06-05T03:49:00.579258Z [info     ] [Warden (Security)] Started successfully agent_id=warden
+2026-06-04 20:49:00,579 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:observer', consumer='observer-broadcast-consumer-1'
+2026-06-04 20:49:00,586 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:warden' on stream 'aegis:stream:warden'.
+2026-06-04 20:49:00,586 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:warden', group='aegis:group:warden', consumer='warden-consumer-1'
+2026-06-04 20:49:00,591 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:warden' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:00,591 [INFO] aegis.bus.subscriber: Subscriber 'warden' started (2 read loop(s)).
+2026-06-05T03:49:00.591186Z [info     ] [Bus] Agent 'warden' wired to stream (non-blocking)
+2026-06-05T03:49:00.591186Z [info     ] [Identity Agent] Starting...   agent_id=identity
+DEBUG: db_path: aegis_data/identity.db
+2026-06-04 20:49:00,607 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:warden', consumer='warden-broadcast-consumer-1'
+2026-06-04 20:49:00,614 [INFO] aegis.identity.store: IdentityStore initialized at: aegis_data/identity.db
+2026-06-04 20:49:00,614 [INFO] aegis.agents.identity.agent: IdentityAgent [identity] started.
+2026-06-04 20:49:00,614 [INFO] aegis.agents.identity.agent:   Subscriptions: ['aegis:stream:identity']
+2026-06-05T03:49:00.614364Z [info     ] [Identity Agent] Started successfully agent_id=identity
+2026-06-04 20:49:00,622 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:identity' on stream 'aegis:stream:identity'.
+2026-06-04 20:49:00,622 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:identity', group='aegis:group:identity', consumer='identity-consumer-1'
+2026-06-04 20:49:00,622 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:identity' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:00,622 [INFO] aegis.bus.subscriber: Subscriber 'identity' started (2 read loop(s)).
+2026-06-05T03:49:00.622818Z [info     ] [Bus] Agent 'identity' wired to stream (non-blocking)
+2026-06-05T03:49:00.622818Z [info     ] [Lexicon (Memory)] Starting... agent_id=lexicon
+2026-06-04 20:49:00,642 [INFO] aegis.agents.lexicon.agent: Lexicon agent starting up...
+2026-06-04 20:49:00,642 [INFO] aegis.agents.lexicon.agent: Lexicon agent ready.
+2026-06-05T03:49:00.642117Z [info     ] [Lexicon (Memory)] Started successfully agent_id=lexicon
+2026-06-04 20:49:00,642 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:identity', consumer='identity-broadcast-consumer-1'
+2026-06-04 20:49:00,649 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:lexicon' on stream 'aegis:stream:lexicon'.
+2026-06-04 20:49:00,649 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:lexicon', group='aegis:group:lexicon', consumer='lexicon-consumer-1'
+2026-06-04 20:49:00,649 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:lexicon' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:00,649 [INFO] aegis.bus.subscriber: Subscriber 'lexicon' started (2 read loop(s)).
+2026-06-05T03:49:00.649096Z [info     ] [Bus] Agent 'lexicon' wired to stream (non-blocking)
+2026-06-05T03:49:00.649096Z [info     ] [Janus (Governance)] Starting... agent_id=janus
+2026-06-04 20:49:00,655 [INFO] aegis.agents.janus.agent: Janus agent starting up...
+2026-06-04 20:49:00,655 [INFO] aegis.agents.janus.storage: PolicyStore initialized at: aegis_data\system\governance\policies.db
+2026-06-04 20:49:00,655 [INFO] aegis.agents.janus.agent: Janus agent ready. 12 policies loaded.
+2026-06-05T03:49:00.655687Z [info     ] [Janus (Governance)] Started successfully agent_id=janus
+2026-06-04 20:49:00,670 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:lexicon', consumer='lexicon-broadcast-consumer-1'
+2026-06-04 20:49:00,670 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:janus' on stream 'aegis:stream:janus'.
+2026-06-04 20:49:00,670 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:janus', group='aegis:group:janus', consumer='janus-consumer-1'
+2026-06-04 20:49:00,670 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:janus' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:00,670 [INFO] aegis.bus.subscriber: Subscriber 'janus' started (2 read loop(s)).
+2026-06-05T03:49:00.670373Z [info     ] [Bus] Agent 'janus' wired to stream (non-blocking)
+2026-06-05T03:49:00.670373Z [info     ] [Oracle (LLM Gateway)] Starting... agent_id=oracle
+2026-06-05T03:49:00.881831Z [info     ] token_manager.tiktoken_available
+2026-06-05T03:49:00.881831Z [info     ] oracle.initialized             models=['llama3.2', 'llama3.1:70b', 'nomic-embed-text']
+2026-06-04 20:49:00,982 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:janus', consumer='janus-broadcast-consumer-1'
+2026-06-04 20:49:01,263 [INFO] httpx: HTTP Request: GET http://localhost:11434/api/tags "HTTP/1.1 200 OK"
+2026-06-05T03:49:01.263833Z [info     ] llm_registry.provider_ready    provider=ollama
+2026-06-05T03:49:01.263833Z [info     ] oracle_cache.initialized       db_path=aegis_data/oracle_cache.db ttl_seconds=3600
+2026-06-05T03:49:01.263833Z [info     ] oracle.started                 cache_enabled=True providers=['ollama']
+2026-06-05T03:49:01.263833Z [info     ] [Oracle (LLM Gateway)] Started successfully agent_id=oracle
+2026-06-04 20:49:01,276 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:oracle' on stream 'aegis:stream:oracle'.
+2026-06-04 20:49:01,276 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:oracle', group='aegis:group:oracle', consumer='oracle-consumer-1'
+2026-06-04 20:49:01,276 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:oracle' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:01,276 [INFO] aegis.bus.subscriber: Subscriber 'oracle' started (2 read loop(s)).
+2026-06-05T03:49:01.276887Z [info     ] [Bus] Agent 'oracle' wired to stream (non-blocking)
+2026-06-05T03:49:01.276887Z [info     ] [The Forge (Execution)] Starting... agent_id=forge
+2026-06-05T03:49:01.295832Z [info     ] forge.startup                  status=initializing
+2026-06-05T03:49:01.295832Z [info     ] tool_registry.registered       tool_name=dir_create version=1.0.0
+2026-06-05T03:49:01.301949Z [info     ] tool_registry.registered       tool_name=dir_list version=1.0.0
+2026-06-05T03:49:01.301949Z [info     ] tool_registry.registered       tool_name=execute_shell_command version=1.0.0
+2026-06-05T03:49:01.301949Z [info     ] tool_registry.registered       tool_name=file_delete version=1.0.0
+2026-06-05T03:49:01.310911Z [info     ] tool_registry.registered       tool_name=file_read version=1.0.0
+2026-06-05T03:49:01.310911Z [info     ] tool_registry.registered       tool_name=file_write version=1.0.0
+2026-06-05T03:49:01.310911Z [info     ] tool_registry.registered       tool_name=git_command version=1.0.0
+2026-06-05T03:49:01.310911Z [info     ] tool_registry.registered       tool_name=http_get version=1.0.0
+2026-06-05T03:49:01.310911Z [info     ] tool_registry.registered       tool_name=http_post version=1.0.0
+2026-06-05T03:49:01.310911Z [info     ] tool_registry.registered       tool_name=json_parse version=1.0.0
+2026-06-05T03:49:01.315490Z [info     ] tool_registry.registered       tool_name=schedule_job version=1.0.0
+2026-06-05T03:49:01.315490Z [info     ] tool_registry.discovery_complete tools_loaded=11
+2026-06-05T03:49:01.315490Z [info     ] forge.startup.tools            count=11
+2026-06-05T03:49:01.322604Z [info     ] skill_registry.registered      skill_name=manage_git_workflow version=1.0.0
+2026-06-05T03:49:01.322604Z [info     ] skill_registry.registered      skill_name=onboard_user version=1.0.0
+2026-06-05T03:49:01.324679Z [info     ] skill_registry.registered      skill_name=red_team_analysis version=1.0.0
+2026-06-05T03:49:01.324679Z [info     ] skill_registry.registered      skill_name=rlm_protocol version=1.0.0
+2026-06-05T03:49:01.324679Z [info     ] skill_registry.registered      skill_name=summarize_document version=1.0.0
+2026-06-05T03:49:01.324679Z [info     ] skill_registry.registered      skill_name=web_research version=1.0.0
+2026-06-05T03:49:01.324679Z [info     ] skill_registry.discovery_complete skills_loaded=6
+2026-06-05T03:49:01.324679Z [info     ] forge.startup.skills           count=6
+2026-06-05T03:49:01.324679Z [info     ] forge.startup.complete         skills=6 tools=11
+2026-06-05T03:49:01.324679Z [info     ] [The Forge (Execution)] Started successfully agent_id=forge
+2026-06-04 20:49:01,324 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:oracle', consumer='oracle-broadcast-consumer-1'
+2026-06-04 20:49:01,329 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:forge' on stream 'aegis:stream:forge'.
+2026-06-04 20:49:01,329 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:forge', group='aegis:group:forge', consumer='forge-consumer-1'
+2026-06-04 20:49:01,333 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:forge' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:01,333 [INFO] aegis.bus.subscriber: Subscriber 'forge' started (2 read loop(s)).
+2026-06-05T03:49:01.333148Z [info     ] [Bus] Agent 'forge' wired to stream (non-blocking)
+2026-06-05T03:49:01.333148Z [info     ] [TCash (Council Lead)] Starting... agent_id=torchestrator
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.intent: IntentParser initialized with 9 pattern rules.
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.decomposer: TaskDecomposer initialized with 11 strategies.
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.session: SessionManager initialized (redis=connected)
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.synthesizer: ResponseSynthesizer initialized.
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.router: MessageRouter initialized for agent 'torchestrator'.
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.agent: TOrchestrator initialized.
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.agent: TOrchestrator starting up...
+2026-06-04 20:49:01,352 [INFO] aegis.agents.torchestrator.agent: TOrchestrator ready. Subscribed to: ['aegis:stream:torchestrator']
+2026-06-05T03:49:01.352293Z [info     ] [TCash (Council Lead)] Started successfully agent_id=torchestrator
+2026-06-04 20:49:01,352 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:forge', consumer='forge-broadcast-consumer-1'
+2026-06-04 20:49:01,357 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:torchestrator' on stream 'aegis:stream:torchestrator'.
+2026-06-04 20:49:01,357 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:torchestrator', group='aegis:group:torchestrator', consumer='torchestrator-consumer-1'
+2026-06-04 20:49:01,357 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:torchestrator' on stream 'aegis:stream:broadcast'.
+2026-06-04 20:49:01,357 [INFO] aegis.bus.subscriber: Subscriber 'torchestrator' started (2 read loop(s)).
+2026-06-05T03:49:01.357107Z [info     ] [Bus] Agent 'torchestrator' wired to stream (non-blocking)
+2026-06-05T03:49:01.357107Z [info     ] ============================================================
+2026-06-05T03:49:01.357107Z [info     ]   AEGIS SYSTEM — ALL AGENTS ONLINE
+2026-06-05T03:49:01.357107Z [info     ] ============================================================
+2026-06-04 20:49:01,364 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:torchestrator', consumer='torchestrator-broadcast-consumer-1'
+2026-06-05T03:49:01.364275Z [info     ] Health check loop started (interval=30s)
+2026-06-05T03:49:01.364275Z [info     ] Aegis system is running. Press Ctrl+C to stop.
+2026-06-04 20:49:22,155 [WARNING] aegis.agents.torchestrator.session: Session f4090c83-b75f-4574-b892-e143f52ace97 not found.
+2026-06-04 20:49:22,155 [WARNING] aegis.agents.torchestrator.agent: Session f4090c83-b75f-4574-b892-e143f52ace97 not found. Creating new session.
+2026-06-04 20:49:22,155 [INFO] aegis.agents.torchestrator.session: Created session 09c2492a-87b8-4d6d-84ac-07f81436d5f3 for user root (tenant: default)
+2026-06-04 20:49:22,155 [INFO] aegis.agents.torchestrator.agent: Intent classified: conversation (confidence: 0.50)
+2026-06-04 20:49:22,155 [INFO] aegis.agents.torchestrator.decomposer: Decomposed intent 'conversation' into plan with 1 steps.
+2026-06-04 20:49:22,155 [INFO] aegis.agents.torchestrator.agent: Task plan created: 1 steps
+2026-06-04 20:49:22,162 [INFO] aegis.agents.torchestrator.router: Published to 'aegis:stream:warden', waiting for correlation=e398efb0-20bb-4222-854f-e825940d1f2e (timeout=10.0s)
+2026-06-04 20:49:22,162 [WARNING] aegis.warden.permission_model: No permission mapping for action/resource
+2026-06-05T03:49:22.164621Z [info     ] [Bus] Routed response from 'warden' to 'aegis:stream:torchestrator' (correlation=e398efb0-20bb-4222-854f-e825940d1f2e, entry=1780631361877-0)
+2026-06-04 20:49:22,164 [INFO] aegis.agents.torchestrator.router: Router received response: correlation=e398efb0-20bb-4222-854f-e825940d1f2e, from=warden, pending_keys=['e398efb0-20bb-4222-854f-e825940d1f2e']
+2026-06-04 20:49:22,164 [INFO] aegis.agents.torchestrator.router: Resolved pending future for correlation: e398efb0-20bb-4222-854f-e825940d1f2e
+2026-06-04 20:49:22,164 [WARNING] aegis.agents.torchestrator.router: Warden denied action 'oracle.query': No permission mapping found for action '' on resource 'oracle.query'. Denied by default.
+2026-06-05T03:49:22.170031Z [info     ] [Bus] Routed response from 'torchestrator' to 'aegis:stream:cli:f4090c83-b75f-4574-b892-e143f52ace97' (correlation=None, entry=1780631361881-0)
+2026-06-04 22:27:12,453 [WARNING] aegis.agents.torchestrator.session: Session f4090c83-b75f-4574-b892-e143f52ace97 not found.
+2026-06-04 22:27:12,453 [WARNING] aegis.agents.torchestrator.agent: Session f4090c83-b75f-4574-b892-e143f52ace97 not found. Creating new session.
+2026-06-04 22:27:12,453 [INFO] aegis.agents.torchestrator.session: Created session 537c83a1-b22c-46c1-acc0-8afd2afa4905 for user root (tenant: default)
+2026-06-04 22:27:12,458 [INFO] aegis.agents.torchestrator.router: Published to 'aegis:stream:warden', waiting for correlation=0a2139f7-83dc-4140-82d8-d9c770a563e8 (timeout=10.0s)
+2026-06-04 22:27:12,458 [WARNING] aegis.warden.permission_model: No permission mapping for action/resource
+2026-06-05T05:27:12.459714Z [info     ] [Bus] Routed response from 'warden' to 'aegis:stream:torchestrator' (correlation=0a2139f7-83dc-4140-82d8-d9c770a563e8, entry=1780637233454-0)
+2026-06-04 22:27:12,459 [INFO] aegis.agents.torchestrator.router: Router received response: correlation=0a2139f7-83dc-4140-82d8-d9c770a563e8, from=warden, pending_keys=['0a2139f7-83dc-4140-82d8-d9c770a563e8']
+2026-06-04 22:27:12,459 [INFO] aegis.agents.torchestrator.router: Resolved pending future for correlation: 0a2139f7-83dc-4140-82d8-d9c770a563e8
+2026-06-04 22:27:12,459 [WARNING] aegis.agents.torchestrator.router: Warden denied action 'oracle.structured': No permission mapping found for action '' on resource 'oracle.structured'. Denied by default.
+2026-06-04 22:27:12,459 [WARNING] aegis.agents.torchestrator.agent: Oracle classification failed. Falling back to QUESTION intent.
+2026-06-04 22:27:12,459 [INFO] aegis.agents.torchestrator.agent: Intent classified: question (confidence: 0.50)
+2026-06-04 22:27:12,459 [INFO] aegis.agents.torchestrator.decomposer: Decomposed intent 'question' into plan with 1 steps.
+2026-06-04 22:27:12,461 [INFO] aegis.agents.torchestrator.agent: Task plan created: 1 steps
+2026-06-04 22:27:12,462 [WARNING] aegis.warden.permission_model: No permission mapping for action/resource
+2026-06-04 22:27:12,463 [INFO] aegis.agents.torchestrator.router: Published to 'aegis:stream:warden', waiting for correlation=84cb8312-bcf6-4b77-acba-3fdfda124105 (timeout=10.0s)
+2026-06-05T05:27:12.475470Z [info     ] [Bus] Routed response from 'warden' to 'aegis:stream:torchestrator' (correlation=84cb8312-bcf6-4b77-acba-3fdfda124105, entry=1780637233468-0)
+2026-06-04 22:27:12,475 [INFO] aegis.agents.torchestrator.router: Router received response: correlation=84cb8312-bcf6-4b77-acba-3fdfda124105, from=warden, pending_keys=['84cb8312-bcf6-4b77-acba-3fdfda124105']
+2026-06-04 22:27:12,475 [INFO] aegis.agents.torchestrator.router: Resolved pending future for correlation: 84cb8312-bcf6-4b77-acba-3fdfda124105
+2026-06-04 22:27:12,475 [WARNING] aegis.agents.torchestrator.router: Warden denied action 'oracle.query': No permission mapping found for action '' on resource 'oracle.query'. Denied by default.
+2026-06-05T05:27:12.475470Z [info     ] [Bus] Routed response from 'torchestrator' to 'aegis:stream:cli:f4090c83-b75f-4574-b892-e143f52ace97' (correlation=None, entry=1780637233471-0)
+2026-06-05T05:27:18.004811Z [info     ] ============================================================
+2026-06-05T05:27:18.005271Z [info     ]   AEGIS SYSTEM MANAGER — SHUTDOWN SEQUENCE
+2026-06-05T05:27:18.005271Z [info     ] ============================================================
+2026-06-05T05:27:18.005271Z [info     ] Health check loop stopped     
+2026-06-05T05:27:18.005271Z [info     ] [TCash (Council Lead)] Stopping... agent_id=torchestrator
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Stopping subscriber 'torchestrator'...
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:torchestrator'.
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:torchestrator'.
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Subscriber 'torchestrator' stopped.
+2026-06-04 22:27:18,005 [INFO] aegis.agents.torchestrator.agent: TOrchestrator shutting down...
+2026-06-04 22:27:18,005 [INFO] aegis.agents.torchestrator.agent: TOrchestrator shutdown complete.
+2026-06-05T05:27:18.005271Z [info     ] [TCash (Council Lead)] Stopped agent_id=torchestrator
+2026-06-05T05:27:18.005271Z [info     ] [The Forge (Execution)] Stopping... agent_id=forge
+2026-06-04 22:27:18,005 [INFO] aegis.bus.subscriber: Stopping subscriber 'forge'...
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:forge'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:forge'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Subscriber 'forge' stopped.
+2026-06-05T05:27:18.010076Z [info     ] forge.shutdown                 status=shutting_down
+2026-06-05T05:27:18.010076Z [info     ] forge.shutdown.complete       
+2026-06-05T05:27:18.010076Z [info     ] [The Forge (Execution)] Stopped agent_id=forge
+2026-06-05T05:27:18.010076Z [info     ] [Oracle (LLM Gateway)] Stopping... agent_id=oracle
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Stopping subscriber 'oracle'...
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:oracle'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:oracle'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,010 [INFO] aegis.bus.subscriber: Subscriber 'oracle' stopped.
+2026-06-05T05:27:18.028507Z [info     ] oracle_cache.flushed          
+2026-06-05T05:27:18.032092Z [info     ] llm_registry.provider_closed   provider=ollama
+2026-06-05T05:27:18.033096Z [info     ] oracle.shutdown_complete      
+2026-06-05T05:27:18.033096Z [info     ] [Oracle (LLM Gateway)] Stopped agent_id=oracle
+2026-06-05T05:27:18.034096Z [info     ] [Janus (Governance)] Stopping... agent_id=janus
+2026-06-04 22:27:18,034 [INFO] aegis.bus.subscriber: Stopping subscriber 'janus'...
+2026-06-04 22:27:18,035 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:janus'.
+2026-06-04 22:27:18,035 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:janus'.
+2026-06-04 22:27:18,035 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,035 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,036 [INFO] aegis.bus.subscriber: Subscriber 'janus' stopped.
+2026-06-04 22:27:18,036 [INFO] aegis.agents.janus.agent: Janus agent shutting down...
+2026-06-04 22:27:18,037 [INFO] aegis.agents.janus.agent: Janus agent shutdown complete.
+2026-06-05T05:27:18.038844Z [info     ] [Janus (Governance)] Stopped   agent_id=janus
+2026-06-05T05:27:18.038844Z [info     ] [Lexicon (Memory)] Stopping... agent_id=lexicon
+2026-06-04 22:27:18,038 [INFO] aegis.bus.subscriber: Stopping subscriber 'lexicon'...
+2026-06-04 22:27:18,039 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:lexicon'.
+2026-06-04 22:27:18,039 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:lexicon'.
+2026-06-04 22:27:18,040 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,040 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,043 [INFO] aegis.bus.subscriber: Subscriber 'lexicon' stopped.
+2026-06-04 22:27:18,043 [INFO] aegis.agents.lexicon.agent: Lexicon agent shutting down...
+2026-06-04 22:27:18,043 [INFO] aegis.agents.lexicon.agent: Lexicon agent stopped.
+2026-06-05T05:27:18.043367Z [info     ] [Lexicon (Memory)] Stopped     agent_id=lexicon
+2026-06-05T05:27:18.043367Z [info     ] [Identity Agent] Stopping...   agent_id=identity
+2026-06-04 22:27:18,044 [INFO] aegis.bus.subscriber: Stopping subscriber 'identity'...
+2026-06-04 22:27:18,045 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:identity'.
+2026-06-04 22:27:18,045 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:identity'.
+2026-06-04 22:27:18,045 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,045 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,046 [INFO] aegis.bus.subscriber: Subscriber 'identity' stopped.
+2026-06-04 22:27:18,049 [INFO] aegis.identity.store: IdentityStore connection closed.
+2026-06-04 22:27:18,049 [INFO] aegis.agents.identity.agent: IdentityAgent [identity] shut down.
+2026-06-05T05:27:18.049916Z [info     ] [Identity Agent] Stopped       agent_id=identity
+2026-06-05T05:27:18.049916Z [info     ] [Warden (Security)] Stopping... agent_id=warden
+2026-06-04 22:27:18,049 [INFO] aegis.bus.subscriber: Stopping subscriber 'warden'...
+2026-06-04 22:27:18,050 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:warden'.
+2026-06-04 22:27:18,050 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:warden'.
+2026-06-04 22:27:18,050 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,051 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,051 [INFO] aegis.bus.subscriber: Subscriber 'warden' stopped.
+2026-06-04 22:27:18,051 [INFO] aegis.agents.warden: Warden agent shutting down
+2026-06-05T05:27:18.052877Z [info     ] [Warden (Security)] Stopped    agent_id=warden
+2026-06-05T05:27:18.052877Z [info     ] [Observer Service] Stopping... agent_id=observer
+2026-06-04 22:27:18,052 [INFO] aegis.bus.subscriber: Stopping subscriber 'observer'...
+2026-06-04 22:27:18,053 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:observer'.
+2026-06-04 22:27:18,053 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:observer'.
+2026-06-04 22:27:18,053 [INFO] aegis.bus.subscriber: Read loop cancelled for 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,053 [INFO] aegis.bus.subscriber: Read loop stopped for stream 'aegis:stream:broadcast'.
+2026-06-04 22:27:18,055 [INFO] aegis.bus.subscriber: Subscriber 'observer' stopped.
+2026-06-05T05:27:18.055265Z [info     ] Observer Agent shutting down.  agent_id=observer
+2026-06-05T05:27:18.055265Z [info     ] Observer Agent shutdown complete. agent_id=observer
+2026-06-05T05:27:18.055265Z [info     ] [Observer Service] Stopped     agent_id=observer
+2026-06-05T05:27:18.055265Z [info     ] [Scheduler] Stopping...       
+2026-06-04 22:27:18,058 [INFO] aegis.manager.scheduler: AegisScheduler stopped
+2026-06-05T05:27:18.058667Z [info     ] [Scheduler] Stopped           
+2026-06-05T05:27:18.058667Z [info     ] [Redis] Closing connection... 
+2026-06-05T05:27:18.058667Z [info     ] [Redis] Connection closed     
+2026-06-05T05:27:18.058667Z [info     ] ============================================================
+2026-06-05T05:27:18.058667Z [info     ]   AEGIS SYSTEM — SHUTDOWN COMPLETE
+2026-06-05T05:27:18.058667Z [info     ] ============================================================
+2026-06-05T05:27:18.058667Z [info     ] Aegis shutdown via KeyboardInterrupt
+2026-06-05T05:27:18.058667Z [info     ] Aegis has exited cleanly.     
+[2m2026-06-17T07:41:53.660890Z[0m [[32m[1minfo     [0m] [1m============================================================[0m
+[2m2026-06-17T07:41:53.661170Z[0m [[32m[1minfo     [0m] [1m  PROJECT AEGIS â€” Initializing[0m
+[2m2026-06-17T07:41:53.661407Z[0m [[32m[1minfo     [0m] [1m============================================================[0m
+[2m2026-06-17T07:41:58.638830Z[0m [[32m[1minfo     [0m] [1mLoaded config from aegis_config.yaml[0m
+[2m2026-06-17T07:41:58.640203Z[0m [[32m[1minfo     [0m] [1m============================================================[0m
+[2m2026-06-17T07:41:58.640784Z[0m [[32m[1minfo     [0m] [1m  AEGIS SYSTEM MANAGER â€” STARTUP SEQUENCE[0m
+[2m2026-06-17T07:41:58.641355Z[0m [[32m[1minfo     [0m] [1m============================================================[0m
+[2m2026-06-17T07:41:58.641817Z[0m [[32m[1minfo     [0m] [1m[Redis] Verifying connectivity...[0m
+[2m2026-06-17T07:41:58.657995Z[0m [[32m[1minfo     [0m] [1m[Redis] Connected to 127.0.0.1:6379 (db=0, pool=50)[0m
+[2m2026-06-17T07:41:58.658576Z[0m [[32m[1minfo     [0m] [1m[Scheduler] Starting...       [0m
+2026-06-17 00:41:58,900 [INFO] aegis.manager.scheduler: JobStore initialized at aegis_data/scheduler_jobs.db
+2026-06-17 00:41:58,963 [WARNING] aegis.manager.scheduler: APScheduler not available â€” using asyncio fallback scheduler. Install with: pip install apscheduler>=4.0
+2026-06-17 00:41:58,968 [INFO] aegis.manager.scheduler: Reloaded 0 enabled jobs from store
+2026-06-17 00:41:58,968 [INFO] aegis.manager.scheduler: AegisScheduler is running (fallback=True)
+[2m2026-06-17T07:41:58.969400Z[0m [[32m[1minfo     [0m] [1m[Scheduler] Running (store=aegis_data/scheduler_jobs.db)[0m
+[2m2026-06-17T07:41:58.969862Z[0m [[32m[1minfo     [0m] [1m[Observer Service] Starting...[0m [36magent_id[0m=[35mobserver[0m
+[2m2026-06-17T07:42:02.709948Z[0m [[32m[1minfo     [0m] [1mobserver_startup              [0m [36magent_id[0m=[35mobserver[0m [36mmessage[0m=[35m'Observer Agent starting up.'[0m
+[2m2026-06-17T07:42:02.711656Z[0m [[32m[1minfo     [0m] [1mHealth endpoint available at http://127.0.0.1:8421/health[0m [36magent_id[0m=[35mobserver[0m
+[2m2026-06-17T07:42:02.712168Z[0m [[32m[1minfo     [0m] [1mObserver Agent startup complete.[0m [36magent_id[0m=[35mobserver[0m
+[2m2026-06-17T07:42:02.712924Z[0m [[32m[1minfo     [0m] [1m[Observer Service] Started successfully[0m [36magent_id[0m=[35mobserver[0m
+2026-06-17 00:42:02,742 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:observer' on stream 'aegis:stream:observer'.
+2026-06-17 00:42:02,743 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:observer', group='aegis:group:observer', consumer='observer-consumer-1'
+2026-06-17 00:42:02,752 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:observer' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:02,753 [INFO] aegis.bus.subscriber: Subscriber 'observer' started (2 read loop(s)).
+[2m2026-06-17T07:42:02.753757Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'observer' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:02.754371Z[0m [[32m[1minfo     [0m] [1m[Warden (Security)] Starting...[0m [36magent_id[0m=[35mwarden[0m
+2026-06-17 00:42:03,041 [INFO] aegis.warden.permission_model: PermissionModel initialized
+2026-06-17 00:42:03,043 [INFO] aegis.warden.allowlist: AllowlistEngine initialized
+2026-06-17 00:42:03,043 [INFO] aegis.warden.bypass: BypassManager initialized
+2026-06-17 00:42:03,044 [INFO] aegis.warden.interceptor: MessageInterceptor initialized.
+2026-06-17 00:42:03,045 [INFO] aegis.agents.warden: WardenAgent initialized.
+2026-06-17 00:42:03,045 [INFO] aegis.agents.warden: Warden agent starting up
+2026-06-17 00:42:03,046 [INFO] aegis.agents.warden: Warden agent ready. Security enforcement active.
+[2m2026-06-17T07:42:03.046605Z[0m [[32m[1minfo     [0m] [1m[Warden (Security)] Started successfully[0m [36magent_id[0m=[35mwarden[0m
+2026-06-17 00:42:03,047 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:observer', consumer='observer-broadcast-consumer-1'
+2026-06-17 00:42:03,055 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:warden' on stream 'aegis:stream:warden'.
+2026-06-17 00:42:03,056 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:warden', group='aegis:group:warden', consumer='warden-consumer-1'
+2026-06-17 00:42:03,065 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:warden' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:03,066 [INFO] aegis.bus.subscriber: Subscriber 'warden' started (2 read loop(s)).
+[2m2026-06-17T07:42:03.066989Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'warden' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:03.067535Z[0m [[32m[1minfo     [0m] [1m[Identity Agent] Starting...  [0m [36magent_id[0m=[35midentity[0m
+2026-06-17 00:42:03,475 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:warden', consumer='warden-broadcast-consumer-1'
+2026-06-17 00:42:03,518 [INFO] aegis.identity.store: IdentityStore initialized at: aegis_data/identity.db
+2026-06-17 00:42:03,519 [INFO] aegis.agents.identity.agent: IdentityAgent [identity] started.
+2026-06-17 00:42:03,519 [INFO] aegis.agents.identity.agent:   Subscriptions: ['aegis:stream:identity']
+DEBUG: db_path: aegis_data/identity.db
+[2m2026-06-17T07:42:03.522929Z[0m [[32m[1minfo     [0m] [1m[Identity Agent] Started successfully[0m [36magent_id[0m=[35midentity[0m
+2026-06-17 00:42:03,533 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:identity' on stream 'aegis:stream:identity'.
+2026-06-17 00:42:03,534 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:identity', group='aegis:group:identity', consumer='identity-consumer-1'
+2026-06-17 00:42:03,543 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:identity' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:03,543 [INFO] aegis.bus.subscriber: Subscriber 'identity' started (2 read loop(s)).
+[2m2026-06-17T07:42:03.544355Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'identity' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:03.544854Z[0m [[32m[1minfo     [0m] [1m[Lexicon (Memory)] Starting...[0m [36magent_id[0m=[35mlexicon[0m
+2026-06-17 00:42:04,152 [INFO] aegis.agents.lexicon.agent: Lexicon agent starting up...
+2026-06-17 00:42:04,153 [INFO] aegis.agents.lexicon.agent: Lexicon agent ready.
+[2m2026-06-17T07:42:04.153802Z[0m [[32m[1minfo     [0m] [1m[Lexicon (Memory)] Started successfully[0m [36magent_id[0m=[35mlexicon[0m
+2026-06-17 00:42:04,154 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:identity', consumer='identity-broadcast-consumer-1'
+2026-06-17 00:42:04,165 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:lexicon' on stream 'aegis:stream:lexicon'.
+2026-06-17 00:42:04,166 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:lexicon', group='aegis:group:lexicon', consumer='lexicon-consumer-1'
+2026-06-17 00:42:04,176 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:lexicon' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:04,177 [INFO] aegis.bus.subscriber: Subscriber 'lexicon' started (2 read loop(s)).
+[2m2026-06-17T07:42:04.178106Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'lexicon' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:04.178652Z[0m [[32m[1minfo     [0m] [1m[Janus (Governance)] Starting...[0m [36magent_id[0m=[35mjanus[0m
+2026-06-17 00:42:04,410 [INFO] aegis.agents.janus.agent: Janus agent starting up...
+2026-06-17 00:42:04,459 [INFO] aegis.agents.janus.storage: PolicyStore initialized at: aegis_data/system/governance/policies.db
+2026-06-17 00:42:04,462 [INFO] aegis.agents.janus.agent: Janus agent ready. 12 policies loaded.
+[2m2026-06-17T07:42:04.463372Z[0m [[32m[1minfo     [0m] [1m[Janus (Governance)] Started successfully[0m [36magent_id[0m=[35mjanus[0m
+2026-06-17 00:42:04,464 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:lexicon', consumer='lexicon-broadcast-consumer-1'
+2026-06-17 00:42:04,474 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:janus' on stream 'aegis:stream:janus'.
+2026-06-17 00:42:04,475 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:janus', group='aegis:group:janus', consumer='janus-consumer-1'
+2026-06-17 00:42:04,485 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:janus' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:04,485 [INFO] aegis.bus.subscriber: Subscriber 'janus' started (2 read loop(s)).
+[2m2026-06-17T07:42:04.486054Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'janus' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:04.486526Z[0m [[32m[1minfo     [0m] [1m[Oracle (LLM Gateway)] Starting...[0m [36magent_id[0m=[35moracle[0m
+[2m2026-06-17T07:42:09.474222Z[0m [[32m[1minfo     [0m] [1mtoken_manager.tiktoken_available[0m
+[2m2026-06-17T07:42:09.474888Z[0m [[32m[1minfo     [0m] [1moracle.initialized            [0m [36mmodels[0m=[35m['llama3.2', 'llama3.1:70b', 'nomic-embed-text'][0m
+2026-06-17 00:42:10,979 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:janus', consumer='janus-broadcast-consumer-1'
+[2m2026-06-17T07:42:10.989349Z[0m [[33m[1mwarning  [0m] [1mollama.health_failed          [0m [36merror[0m=[35m'All connection attempts failed'[0m
+[2m2026-06-17T07:42:10.990025Z[0m [[33m[1mwarning  [0m] [1mllm_registry.provider_unhealthy[0m [36mbase_url[0m=[35mhttp://localhost:11434[0m [36mprovider[0m=[35mollama[0m
+[2m2026-06-17T07:42:11.017297Z[0m [[32m[1minfo     [0m] [1moracle_cache.initialized      [0m [36mdb_path[0m=[35maegis_data/oracle_cache.db[0m [36mttl_seconds[0m=[35m3600[0m
+[2m2026-06-17T07:42:11.017803Z[0m [[32m[1minfo     [0m] [1moracle.started                [0m [36mcache_enabled[0m=[35mTrue[0m [36mproviders[0m=[35m[][0m
+[2m2026-06-17T07:42:11.018335Z[0m [[32m[1minfo     [0m] [1m[Oracle (LLM Gateway)] Started successfully[0m [36magent_id[0m=[35moracle[0m
+2026-06-17 00:42:11,028 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:oracle' on stream 'aegis:stream:oracle'.
+2026-06-17 00:42:11,029 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:oracle', group='aegis:group:oracle', consumer='oracle-consumer-1'
+2026-06-17 00:42:11,037 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:oracle' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:11,038 [INFO] aegis.bus.subscriber: Subscriber 'oracle' started (2 read loop(s)).
+[2m2026-06-17T07:42:11.038710Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'oracle' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:11.039270Z[0m [[32m[1minfo     [0m] [1m[The Forge (Execution)] Starting...[0m [36magent_id[0m=[35mforge[0m
+[2m2026-06-17T07:42:11.381135Z[0m [[32m[1minfo     [0m] [1mforge.startup                 [0m [36mstatus[0m=[35minitializing[0m
+[2m2026-06-17T07:42:11.430220Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mdir_create[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:11.463174Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mdir_list[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:11.503064Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mexecute_shell_command[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:11.539795Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mfile_delete[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:11.962156Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mfile_read[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:11.995171Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mfile_write[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.030191Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mgit_command[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.062854Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mhttp_get[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.095937Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mhttp_post[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.128607Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mjson_parse[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.198474Z[0m [[32m[1minfo     [0m] [1mtool_registry.registered      [0m [36mtool_name[0m=[35mschedule_job[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.199136Z[0m [[32m[1minfo     [0m] [1mtool_registry.discovery_complete[0m [36mtools_loaded[0m=[35m11[0m
+[2m2026-06-17T07:42:12.199640Z[0m [[32m[1minfo     [0m] [1mforge.startup.tools           [0m [36mcount[0m=[35m11[0m
+[2m2026-06-17T07:42:12.256183Z[0m [[32m[1minfo     [0m] [1mskill_registry.registered     [0m [36mskill_name[0m=[35mmanage_git_workflow[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.290733Z[0m [[32m[1minfo     [0m] [1mskill_registry.registered     [0m [36mskill_name[0m=[35monboard_user[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.323255Z[0m [[32m[1minfo     [0m] [1mskill_registry.registered     [0m [36mskill_name[0m=[35mred_team_analysis[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.360165Z[0m [[32m[1minfo     [0m] [1mskill_registry.registered     [0m [36mskill_name[0m=[35mrlm_protocol[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.393347Z[0m [[32m[1minfo     [0m] [1mskill_registry.registered     [0m [36mskill_name[0m=[35msummarize_document[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.428199Z[0m [[32m[1minfo     [0m] [1mskill_registry.registered     [0m [36mskill_name[0m=[35mweb_research[0m [36mversion[0m=[35m1.0.0[0m
+[2m2026-06-17T07:42:12.428747Z[0m [[32m[1minfo     [0m] [1mskill_registry.discovery_complete[0m [36mskills_loaded[0m=[35m6[0m
+[2m2026-06-17T07:42:12.429281Z[0m [[32m[1minfo     [0m] [1mforge.startup.skills          [0m [36mcount[0m=[35m6[0m
+[2m2026-06-17T07:42:12.429767Z[0m [[32m[1minfo     [0m] [1mforge.startup.complete        [0m [36mskills[0m=[35m6[0m [36mtools[0m=[35m11[0m
+[2m2026-06-17T07:42:12.430262Z[0m [[32m[1minfo     [0m] [1m[The Forge (Execution)] Started successfully[0m [36magent_id[0m=[35mforge[0m
+2026-06-17 00:42:12,431 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:oracle', consumer='oracle-broadcast-consumer-1'
+2026-06-17 00:42:12,440 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:forge' on stream 'aegis:stream:forge'.
+2026-06-17 00:42:12,441 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:forge', group='aegis:group:forge', consumer='forge-consumer-1'
+2026-06-17 00:42:12,451 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:forge' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:12,452 [INFO] aegis.bus.subscriber: Subscriber 'forge' started (2 read loop(s)).
+[2m2026-06-17T07:42:12.452732Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'forge' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:12.453314Z[0m [[32m[1minfo     [0m] [1m[TCash (Council Lead)] Starting...[0m [36magent_id[0m=[35mtorchestrator[0m
+2026-06-17 00:42:12,830 [INFO] aegis.agents.torchestrator.intent: IntentParser initialized with 9 pattern rules.
+2026-06-17 00:42:12,831 [INFO] aegis.agents.torchestrator.decomposer: TaskDecomposer initialized with 11 strategies.
+2026-06-17 00:42:12,831 [INFO] aegis.agents.torchestrator.session: SessionManager initialized (redis=connected)
+2026-06-17 00:42:12,832 [INFO] aegis.agents.torchestrator.synthesizer: ResponseSynthesizer initialized.
+2026-06-17 00:42:12,833 [INFO] aegis.agents.torchestrator.router: MessageRouter initialized for agent 'torchestrator'.
+2026-06-17 00:42:12,833 [INFO] aegis.agents.torchestrator.agent: TOrchestrator initialized.
+2026-06-17 00:42:12,834 [INFO] aegis.agents.torchestrator.agent: TOrchestrator starting up...
+2026-06-17 00:42:12,834 [INFO] aegis.agents.torchestrator.agent: TOrchestrator ready. Subscribed to: ['aegis:stream:torchestrator']
+[2m2026-06-17T07:42:12.835024Z[0m [[32m[1minfo     [0m] [1m[TCash (Council Lead)] Started successfully[0m [36magent_id[0m=[35mtorchestrator[0m
+2026-06-17 00:42:12,835 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:forge', consumer='forge-broadcast-consumer-1'
+2026-06-17 00:42:12,845 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:torchestrator' on stream 'aegis:stream:torchestrator'.
+2026-06-17 00:42:12,846 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:torchestrator', group='aegis:group:torchestrator', consumer='torchestrator-consumer-1'
+2026-06-17 00:42:12,857 [INFO] aegis.bus.subscriber: Created consumer group 'aegis:group:broadcast:torchestrator' on stream 'aegis:stream:broadcast'.
+2026-06-17 00:42:12,857 [INFO] aegis.bus.subscriber: Subscriber 'torchestrator' started (2 read loop(s)).
+[2m2026-06-17T07:42:12.858253Z[0m [[32m[1minfo     [0m] [1m[Bus] Agent 'torchestrator' wired to stream (non-blocking)[0m
+[2m2026-06-17T07:42:12.858789Z[0m [[32m[1minfo     [0m] [1m============================================================[0m
+[2m2026-06-17T07:42:12.859370Z[0m [[32m[1minfo     [0m] [1m  AEGIS SYSTEM â€” ALL AGENTS ONLINE[0m
+[2m2026-06-17T07:42:12.859885Z[0m [[32m[1minfo     [0m] [1m============================================================[0m
+2026-06-17 00:42:12,861 [INFO] aegis.bus.subscriber: Starting read loop: stream='aegis:stream:broadcast', group='aegis:group:broadcast:torchestrator', consumer='torchestrator-broadcast-consumer-1'
+[2m2026-06-17T07:42:12.869616Z[0m [[32m[1minfo     [0m] [1mHealth check loop started (interval=30s)[0m
+[2m2026-06-17T07:42:12.871306Z[0m [[32m[1minfo     [0m] [1mAegis system is running. Press Ctrl+C to stop.[0m
+2026-06-17 00:43:14,259 [WARNING] aegis.agents.torchestrator.session: Session 17b6eac5-f935-4bc0-9736-5dd07ed03fb0 not found.
+2026-06-17 00:43:14,260 [WARNING] aegis.agents.torchestrator.agent: Session 17b6eac5-f935-4bc0-9736-5dd07ed03fb0 not found. Creating new session.
+2026-06-17 00:43:14,263 [INFO] aegis.agents.torchestrator.session: Created session 176e4ac4-4d0d-4bb3-bbe2-6f9bcb0c66e8 for user root (tenant: default)
+2026-06-17 00:43:14,266 [INFO] aegis.agents.torchestrator.router: Published to 'aegis:stream:warden', waiting for correlation=be6a3ada-1293-419a-b16d-58209e1f8cbd (timeout=10.0s)
+2026-06-17 00:43:14,267 [WARNING] aegis.warden.permission_model: No permission mapping for action/resource
+[2m2026-06-17T07:43:14.269938Z[0m [[32m[1minfo     [0m] [1m[Bus] Routed response from 'warden' to 'aegis:stream:torchestrator' (correlation=be6a3ada-1293-419a-b16d-58209e1f8cbd, entry=1781682194269-0)[0m
+2026-06-17 00:43:14,270 [INFO] aegis.agents.torchestrator.router: Router received response: correlation=be6a3ada-1293-419a-b16d-58209e1f8cbd, from=warden, pending_keys=['be6a3ada-1293-419a-b16d-58209e1f8cbd']
+2026-06-17 00:43:14,271 [INFO] aegis.agents.torchestrator.router: Resolved pending future for correlation: be6a3ada-1293-419a-b16d-58209e1f8cbd
+2026-06-17 00:43:14,271 [WARNING] aegis.agents.torchestrator.router: Warden denied action 'oracle.structured': No permission mapping found for action '' on resource 'oracle.structured'. Denied by default.
+2026-06-17 00:43:14,272 [WARNING] aegis.agents.torchestrator.agent: Oracle classification failed. Falling back to QUESTION intent.
+2026-06-17 00:43:14,272 [INFO] aegis.agents.torchestrator.agent: Intent classified: question (confidence: 0.50)
+2026-06-17 00:43:14,273 [INFO] aegis.agents.torchestrator.decomposer: Decomposed intent 'question' into plan with 1 steps.
+2026-06-17 00:43:14,273 [INFO] aegis.agents.torchestrator.agent: Task plan created: 1 steps
+2026-06-17 00:43:14,275 [INFO] aegis.agents.torchestrator.router: Published to 'aegis:stream:warden', waiting for correlation=ea7bf833-85d2-4a66-bd79-fd2ad0245e56 (timeout=10.0s)
+2026-06-17 00:43:14,275 [WARNING] aegis.warden.permission_model: No permission mapping for action/resource
+[2m2026-06-17T07:43:14.277239Z[0m [[32m[1minfo     [0m] [1m[Bus] Routed response from 'warden' to 'aegis:stream:torchestrator' (correlation=ea7bf833-85d2-4a66-bd79-fd2ad0245e56, entry=1781682194276-0)[0m
+2026-06-17 00:43:14,277 [INFO] aegis.agents.torchestrator.router: Router received response: correlation=ea7bf833-85d2-4a66-bd79-fd2ad0245e56, from=warden, pending_keys=['ea7bf833-85d2-4a66-bd79-fd2ad0245e56']
+2026-06-17 00:43:14,278 [INFO] aegis.agents.torchestrator.router: Resolved pending future for correlation: ea7bf833-85d2-4a66-bd79-fd2ad0245e56
+2026-06-17 00:43:14,278 [WARNING] aegis.agents.torchestrator.router: Warden denied action 'oracle.query': No permission mapping found for action '' on resource 'oracle.query'. Denied by default.
+[2m2026-06-17T07:43:14.279976Z[0m [[32m[1minfo     [0m] [1m[Bus] Routed response from 'torchestrator' to 'aegis:stream:cli:17b6eac5-f935-4bc0-9736-5dd07ed03fb0' (correlation=None, entry=1781682194279-0)[0m
+[2m2026-06-19T00:37:18.392761Z[0m [[33m[1mwarning  [0m] [1mAgent 'observer' health changed to: unresponsive[0m [36magent_id[0m=[35mobserver[0m [36malert_agent[0m=[35mobserver[0m [36mnew_health[0m=[35munresponsive[0m
+[2m2026-06-19T00:37:39.816288Z[0m [[33m[1mwarning  [0m] [1mAgent 'observer' health changed to: degraded[0m [36magent_id[0m=[35mobserver[0m [36malert_agent[0m=[35mobserver[0m [36mnew_health[0m=[35mdegraded[0m
+2026-06-18 23:08:05,616 [ERROR] aegis.bus.subscriber: Redis connection issue in read loop for 'aegis:stream:broadcast': Error 111 connecting to 127.0.0.1:6379. Connect call failed ('127.0.0.1', 6379).. Retrying in 2s...
+2026-06-18 23:08:05,943 [ERROR] aegis.bus.subscriber: Redis connection issue in read loop for 'aegis:stream:torchestrator': Error 111 connecting to 127.0.0.1:6379. Connect call failed ('127.0.0.1', 6379).. Retrying in 2s...
+2026-06-18 23:08:05,951 [ERROR] aegis.bus.subscriber: Redis connection issue in read loop for 'aegis:stream:broadcast': Error 111 connecting to 127.0.0.1:6379. Connect call failed ('127.0.0.1', 6379).. Retrying in 2s...
+2026-06-18 23:08:05,951 [ERROR] aegis.bus.subscriber: Redis connection issue in read loop for 'aegis:stream:forge': Error 111 connecting to 127.0.0.1:6379. Connect call failed ('127.0.0.1', 6379).. Retrying in 2s...

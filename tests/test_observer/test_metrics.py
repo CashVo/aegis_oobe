@@ -12,7 +12,6 @@ Tests cover:
 
 import time
 import pytest
-from datetime import datetime, timezone, timedelta
 
 from aegis.schemas.observer import MetricEvent, MetricType
 from aegis.observer.metrics import MetricsCollector, MetricSample

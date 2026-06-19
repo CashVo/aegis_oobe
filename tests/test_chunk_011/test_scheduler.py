@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from aegis.utils.time import utcnow
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -124,7 +124,7 @@ class TestJobStore:
             "action": "forge.execute_tool",
             "action_payload": {"tool": "test"},
             "enabled": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": utcnow().isoformat(),
         }
 
         # Save
@@ -166,7 +166,7 @@ class TestJobStore:
             "schedule_config": {"seconds": 60},
             "action": "forge.execute_tool",
             "enabled": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": utcnow().isoformat(),
         }
         await store.save_job(job)
 

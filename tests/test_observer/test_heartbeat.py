@@ -11,7 +11,7 @@ Tests cover:
 
 import asyncio
 import pytest
-from datetime import datetime, timezone, timedelta
+from aegis.utils.time import utcnow, timedelta
 
 from aegis.schemas.observer import AgentHealth, HeartbeatEvent
 from aegis.observer.heartbeat import HeartbeatMonitor
@@ -93,7 +93,7 @@ class TestHeartbeatMonitor:
     async def test_missed_heartbeat_detection(self, monitor):
         """Test that stale heartbeats trigger health degradation."""
         # Record a heartbeat with a timestamp in the past
-        old_time = datetime.now(timezone.utc) - timedelta(seconds=5)
+        old_time = utcnow() - timedelta(seconds=5)
         event = HeartbeatEvent(agent_id="stale_agent", timestamp=old_time, status=AgentHealth.HEALTHY)
         monitor.record_heartbeat(event)
 

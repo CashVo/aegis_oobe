@@ -3,16 +3,9 @@
 
 import pytest
 from uuid import UUID
-from datetime import datetime, timedelta, timezone
+from aegis.utils.time import dt_datetime, utcnow, timedelta
 
 from aegis.schemas import AegisMessage, MessageType, Priority
-
-# Helper for consistent UTC timestamps
-def get_utc_now():
-    if hasattr(timezone, 'utc'):
-        return datetime.now(timezone.utc)
-    else:
-        return datetime.utcnow()
 
 def test_aegis_message_creation_with_required_fields():
     """Verify that a message can be created with only the required fields."""
@@ -45,8 +38,8 @@ def test_aegis_message_auto_generates_fields():
     assert msg1.message_id != msg2.message_id
 
     # Verify timestamp is a recent datetime object
-    assert isinstance(msg1.timestamp, datetime)
-    assert get_utc_now() - msg1.timestamp < timedelta(seconds=2)
+    assert isinstance(msg1.timestamp, dt_datetime)
+    assert utcnow() - msg1.timestamp < timedelta(seconds=2)
 
 def test_aegis_message_serialization_deserialization_roundtrip():
     """Ensure a message can be serialized to JSON and back without data loss."""

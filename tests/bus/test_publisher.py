@@ -6,7 +6,6 @@ Tests for the Message Publisher.
 
 import pytest
 from unittest.mock import AsyncMock, patch
-from datetime import datetime
 
 from aegis.bus.publisher import MessagePublisher
 from aegis.schemas.message import AegisMessage, MessageType, Priority
