@@ -1,3 +1,0 @@
-[console_scripts]
-aegis = aegis.cli.main:main
-aegis-mcp = aegis.mcp.server:main

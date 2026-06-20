@@ -31,9 +31,15 @@ from aegis.cli.commands.config import app as config_app
 app = typer.Typer(
     name="aegis",
     help="Project Aegis — Local-First Multi-Agent System",
-    no_args_is_help=True,
+    no_args_is_help=False,
     rich_markup_mode="rich",
 )
+
+@app.callback(invoke_without_command=True)
+def root(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(code=0)
 
 # ── Register top-level commands (the correct way) ──────
 app.command()(start)
@@ -51,6 +57,7 @@ app.add_typer(config_app, name="config", help="Configuration commands.")
 
 def main() -> None:
     """Entry point invoked by the console_scripts hook."""
+    
     app()
 
 
