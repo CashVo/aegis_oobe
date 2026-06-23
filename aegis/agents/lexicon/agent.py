@@ -65,7 +65,7 @@ class LexiconAgent:
             redis_client: Async Redis client for L5 scratchpad and bus communication.
             base_dir: Override for the base data directory.
         """
-        self._redis = redis_client
+        self.client = redis_client
         self._base_dir = base_dir
         self._user_contexts: Dict[str, Dict[str, Any]] = {}
         # Cache: {tenant_id:user_id -> {l0, l1, l2, l3, l4, router, governor}}
@@ -191,7 +191,7 @@ class LexiconAgent:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 session_id=session_id,
-                redis_client=self._redis,
+                redis_client=self.client,
             )
             ctx["l5_sessions"][session_id] = l5
             ctx["router"].set_l5(l5)

@@ -84,7 +84,7 @@ AGENT_REGISTRY: List[AgentEntry] = [
     AgentEntry(
         agent_id="observer",
         display_name="Observer Service",
-        module_path="aegis.agents.observer",
+        module_path="aegis.observer",
         class_name="ObserverAgent",
         priority=10,
         required=False,  # System can run with degraded logging (RT-3)
@@ -146,7 +146,7 @@ AGENT_REGISTRY: List[AgentEntry] = [
     AgentEntry(
         agent_id="forge",
         display_name="The Forge (Execution)",
-        module_path="aegis.agents.forge",
+        module_path="aegis.forge",
         class_name="ForgeAgent",
         priority=70,
         required=True,
@@ -157,7 +157,7 @@ AGENT_REGISTRY: List[AgentEntry] = [
         agent_id="torchestrator",
         display_name="TOrchestrator (Council Lead)",
         module_path="aegis.agents.torchestrator",
-        class_name="TorchestratorAgent",
+        class_name="TOrchestrator",
         priority=80,
         required=True,
         config_key="torchestrator",

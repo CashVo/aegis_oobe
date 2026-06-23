@@ -88,7 +88,7 @@ class MessageSubscriber:
             claim_min_idle_ms: Minimum idle time (ms) before claiming pending messages.
             max_retries: Maximum redelivery attempts before dropping a message.
         """
-        self._redis = redis_client
+        self.client = redis_client
         self._agent_id = agent_id
         self._handler = handler
         self._subscribe_to_broadcast = subscribe_to_broadcast
@@ -128,7 +128,7 @@ class MessageSubscriber:
             group: The consumer group name.
         """
         try:
-            await self._redis.xgroup_create(
+            await self.client.xgroup_create(
                 name=stream,
                 groupname=group,
                 id="0",  # Start reading from the beginning for new groups
@@ -166,7 +166,7 @@ class MessageSubscriber:
 
         try:
             # XAUTOCLAIM returns: [next_start_id, [[id, fields], ...], [deleted_ids]]
-            result = await self._redis.xautoclaim(
+            result = await self.client.xautoclaim(
                 name=stream,
                 groupname=group,
                 consumername=consumer,
@@ -241,7 +241,7 @@ class MessageSubscriber:
             entry_id: The stream entry ID to acknowledge.
         """
         try:
-            await self._redis.xack(stream, group, entry_id)
+            await self.client.xack(stream, group, entry_id)
             logger.debug(f"Acknowledged entry {entry_id} on '{stream}/{group}'.")
         except (RedisConnectionError, RedisTimeoutError) as e:
             logger.warning(
@@ -283,7 +283,7 @@ class MessageSubscriber:
         while self._running:
             try:
                 # XREADGROUP: read new messages (id=">")
-                responses = await self._redis.xreadgroup(
+                responses = await self.client.xreadgroup(
                     groupname=group,
                     consumername=consumer,
                     streams={stream: ">"},

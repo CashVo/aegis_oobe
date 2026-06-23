@@ -37,7 +37,7 @@ async def dashboard(request: Request):
         # Attempt to read heartbeat data
         if redis_ok:
             try:
-                r = bus._redis
+                r = bus.client
                 keys = await r.keys("aegis:heartbeat:*")
                 for key in keys:
                     agent_name = key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]

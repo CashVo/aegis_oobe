@@ -53,7 +53,7 @@ class MessagePublisher:
             max_stream_length: Maximum approximate stream length before
                 trimming. Set to None for unbounded streams.
         """
-        self._redis = redis_client
+        self.client = redis_client
         self._max_stream_length = max_stream_length
 
     def _serialize_message(self, message: AegisMessage) -> dict[str, str]:
@@ -122,7 +122,7 @@ class MessagePublisher:
         serialized = self._serialize_message(message)
 
         try:
-            entry_id = await self._redis.xadd(
+            entry_id = await self.client.xadd(
                 name=stream_key,
                 fields=serialized,
                 maxlen=self._max_stream_length,

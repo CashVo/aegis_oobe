@@ -36,7 +36,7 @@ def status(
         except Exception:
             redis_ok = False
         finally:
-            if bus._redis and bus._redis.is_connected:
+            if bus.connected:
                 await bus.disconnect()
 
         agents_status = {}
@@ -45,7 +45,7 @@ def status(
                 import redis.asyncio as aioredis
                 # Reconnect for this query
                 await bus.connect()
-                r = bus._redis
+                r = bus.client
                 keys = await r.keys("aegis:heartbeat:*")
                 for key in keys:
                     agent_name = key.decode().split(":")[-1]
@@ -54,7 +54,7 @@ def status(
             except Exception:
                 pass
             finally:
-                if bus._redis and bus._redis.is_connected:
+                if bus.connected:
                     await bus.disconnect()
 
         if json_output:
