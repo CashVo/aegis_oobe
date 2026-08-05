@@ -2,9 +2,8 @@
 """
 ocmd — Ollama Commands.
 
-Default behavior targets the remote workstation Ollama instance.
+Ollama management:
 
-Usage:
     ocmd setup
     ocmd models [use-local=true]
     ocmd status [use-local=true]
@@ -12,31 +11,30 @@ Usage:
     ocmd unload <model> [use-local=true]
     ocmd keepalive <model> <duration> [use-local=true]
 
-Examples:
-    ocmd setup
+Aider profiles:
 
-    ocmd models
-    ocmd models use-local=true
+    ocmd start-aider --list
+    ocmd start-aider ws-qwen-fast
+    ocmd start-aider ws-qwen-coder
+    ocmd start-aider oracle-qwen-fast
+    ocmd start-aider oracle-quen-coder
 
-    ocmd status
-    ocmd status use-local=true
+Pass additional Aider arguments after the profile:
 
-    ocmd load qwen2.5-coder:32b
-    ocmd load qwen2.5-coder:32b 60m
-    ocmd load qwen2.5-coder:32b 60m use-local=true
-
-    ocmd keepalive qwen2.5-coder:32b -1
-    ocmd keepalive qwen2.5-coder:32b 60m use-local=true
-
-    ocmd unload qwen2.5-coder:32b
-    ocmd unload qwen2.5-coder:32b use-local=true
+    ocmd start-aider oracle-qwen-fast --read AGENTS.md
+    ocmd start-aider ws-qwen-fast --message "Review the current diff"
 
 Supported durations:
+
     30s       30 seconds
     60m       60 minutes
     2h        2 hours
     0         unload immediately
     -1        keep loaded indefinitely
+
+HINT:
+- Run this command to install/update ocmd on local env:
+    python3 utils/ocmd.py setup
 """
 
 from __future__ import annotations
@@ -59,10 +57,45 @@ DEFAULT_OLLAMA_HOST = os.environ.get(
     "http://ai-brain.hare-catla.ts.net:11434",
 ).rstrip("/")
 
-LOCAL_OLLAMA_HOST = "http://207.211.172:11434"
+LOCAL_OLLAMA_HOST = os.environ.get(
+    "OLLAMA_LOCAL_HOST",
+    "http://localhost:11434",
+).rstrip("/")
 
 INSTALL_DIR = Path.home() / "bin"
 INSTALL_PATH = INSTALL_DIR / "ocmd"
+
+# ---------------------------------------------------------------------
+# Aider profiles
+# ---------------------------------------------------------------------
+
+AIDER_PROFILES: dict[str, dict[str, str]] = {
+    "ws-qwen-fast": {
+        "model": "ollama_chat/qwen3.5:0.8b",
+        "host": DEFAULT_OLLAMA_HOST,
+        "description": "Workstation Ollama — Qwen3.5:0.8B - FAST",
+    },
+    "ws-qwen-coder": {
+        "model": "ollama_chat/qwen2.5-coder",
+        "host": DEFAULT_OLLAMA_HOST,
+        "description": "Workstation Ollama — Qwen2.5-coder - CODING",
+    },
+    "oracle-qwen-fast": {
+        "model": "ollama/qwen3.5:0.8b",
+        "host": LOCAL_OLLAMA_HOST,
+        "description": "Oracle-local Ollama — Qwen3.5:0.8b - FAST",
+    },
+    "oracle-qwen-coder": {
+        "model": "ollama_chat/qwen2.5-coder:latest",
+        "host": LOCAL_OLLAMA_HOST,
+        "description": "Oracle-local Ollama — Qwen Coder - CODING",
+    },
+    "oracle-qwen-thinking": {
+        "model": "ollama/qwen3.5:9b",
+        "host": LOCAL_OLLAMA_HOST,
+        "description": "Oracle-local Ollama — Qwen Thinking - THINKING",
+    },
+}
 
 # ---------------------------------------------------------------------
 # Host selection
@@ -70,9 +103,7 @@ INSTALL_PATH = INSTALL_DIR / "ocmd"
 
 def extract_host_flag(args: list[str]) -> tuple[list[str], str]:
     """
-    Remove the host-selection flag from args and return:
-
-        cleaned_args, selected_host
+    Remove the host-selection flag from arguments.
 
     Supported forms:
 
@@ -83,7 +114,7 @@ def extract_host_flag(args: list[str]) -> tuple[list[str], str]:
         --use-local=false
         --use-remote
 
-    The default is the remote Ollama host.
+    The default is the remote/workstation Ollama host.
     """
 
     cleaned_args: list[str] = []
@@ -137,10 +168,11 @@ def post_json(host: str, path: str, payload: dict) -> dict:
 
     # Ollama may return newline-delimited JSON when streaming.
     lines = raw.decode("utf-8").splitlines()
-    parsed =[
+
+    parsed = [
         json.loads(line)
         for line in lines
-        if line.strip()
+        if [line.strip()]
     ]
 
     return parsed[-1] if parsed else {}
@@ -157,7 +189,7 @@ def get_json(host: str, path: str) -> dict:
 # Utility functions
 # ---------------------------------------------------------------------
 
-def parse_duration(value: str):
+def parse_duration(value: str) -> int | str:
     """
     Convert numeric Ollama values to integers while preserving
     duration strings such as 30s, 60m, and 2h.
@@ -245,7 +277,7 @@ def show_status(host: str) -> None:
         expires_at = model.get("expires_at", "?")
 
         print(
-            f"{name:<35} "
+            f"{name:<35}"
             f"{size_gb:>6.1f} GB   "
             f"{expires_at}"
         )
@@ -271,10 +303,94 @@ def list_models(host: str) -> None:
         modified_at = model.get("modified_at", "?")
 
         print(
-            f"{name:<35} "
+            f"{name:<35}"
             f"{size_gb:>6.1f} GB   "
             f"{modified_at}"
         )
+
+# ---------------------------------------------------------------------
+# Aider commands
+# ---------------------------------------------------------------------
+
+def list_aider_profiles() -> None:
+    """Display all configured Aider profiles."""
+
+    print("Available Aider profiles:")
+    print()
+
+    for name, profile in AIDER_PROFILES.items():
+        print(f"  {name:<18} {profile['description']}")
+        print(f"  {'':<18} Model: {profile['model']}")
+        print(f"  {'':<18} Host:  {profile['host']}")
+        print()
+
+def start_aider(profile_name: str, aider_args: list[str]) -> int:
+    """
+    Launch Aider using a configured host/model profile.
+
+    os.execvp() replaces the current ocmd process with Aider. This gives
+    Aider normal interactive terminal behavior, proper signal handling,
+    and clean operation inside tmux.
+    """
+
+    profile = AIDER_PROFILES.get(profile_name)
+
+    if profile is None:
+        print(
+            f"Unknown Aider profile: {profile_name}",
+            file=sys.stderr,
+        )
+        print("", file=sys.stderr)
+        list_aider_profiles()
+        return 2
+
+    aider_command = [
+        "aider",
+        "--model",
+        profile["model"],
+        *aider_args,
+    ]
+
+    # Copy the current environment and override the Ollama endpoint
+    # for this Aider process only.
+    aider_environment = os.environ.copy()
+    aider_environment["OLLAMA_API_BASE"] = profile["host"]
+
+    print(
+        f"Starting Aider profile '{profile_name}'"
+    )
+    print(f"  Model: {profile['model']}")
+    print(f"  Host:  {profile['host']}")
+    print()
+
+    try:
+        os.execvpe(
+            aider_command[0],
+            aider_command,
+            aider_environment
+        )
+
+    except FileNotFoundError:
+        print(
+            "Aider was not found on PATH.",
+            file=sys.stderr,
+        )
+        print(
+            "Activate the environment where Aider is installed, "
+            "then try again.",
+            file=sys.stderr,
+        )
+        return 127
+
+    except PermissionError:
+        print(
+            "Aider exists but is not executable.",
+            file=sys.stderr,
+        )
+        return 127
+
+    # os.execvp() does not return on success.
+    return 0
 
 # ---------------------------------------------------------------------
 # Installation
@@ -282,9 +398,9 @@ def list_models(host: str) -> None:
 
 def setup() -> None:
     """
-    Install the currently running/source script as ~/bin/ocmd.
+    Install the current script as ~/bin/ocmd.
 
-    Run this from the project copy after making changes:
+    Run this command to install/update:
 
         python3 utils/ocmd.py setup
     """
@@ -294,11 +410,12 @@ def setup() -> None:
 
     INSTALL_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Avoid copying the file onto itself if running ~/bin/ocmd setup.
+    # Avoid copying the file onto itself.
     if source_path != destination:
         shutil.copy2(source_path, destination)
 
     current_mode = destination.stat().st_mode
+
     destination.chmod(
         current_mode
         | stat.S_IXUSR
@@ -311,6 +428,7 @@ def setup() -> None:
     print("Try:")
     print("  ocmd models")
     print("  ocmd status")
+    print("  ocmd start-aider --list")
 
 # ---------------------------------------------------------------------
 # Help
@@ -331,16 +449,44 @@ def main() -> int:
     command = sys.argv[1]
     raw_args = sys.argv[2:]
 
-    # Remove use-local=true or --use-local before command validation.
+    # Handle start-aider before global host-flag processing.
+    #
+    # This is intentional: every Aider profile already specifies its
+    # host, and Aider's own arguments should pass through untouched.
+    if command == "start-aider":
+        if not raw_args:
+            print(
+                "Usage: ocmd start-aider "
+                "<profile-name> [Aider arguments]",
+                file=sys.stderr,
+            )
+            print()
+            list_aider_profiles()
+            return 2
+
+        if raw_args == ["--list"]:
+            list_aider_profiles()
+            return 0
+
+        profile_name = raw_args[0]
+        aider_args = raw_args[1:]
+
+        return start_aider(profile_name, aider_args)
+
+    # All non-Aider commands use the normal host-selection behavior.
     args, host = extract_host_flag(raw_args)
 
     try:
         if command == "setup":
+            if args:
+                print("Usage: ocmd setup")
+                return 1
+
             setup()
 
-        elif command == "models":
+        elif command == "list":
             if args:
-                print("Usage: ocmd models [use-local=true]")
+                print("Usage: ocmd list [use-local=true]")
                 return 1
 
             list_models(host)
@@ -386,22 +532,32 @@ def main() -> int:
             set_keepalive(host, args[0], args[1])
 
         else:
-            print(f"Unknown command: {command}")
+            print(f"Unknown command: {command}", file=sys.stderr)
+            print()
             print_usage()
             return 1
 
     except urllib.error.HTTPError as error:
-        print(f"Ollama returned HTTP {error.code}: {error.reason}")
-        print(f"Host: {host}")
+        print(
+            f"Ollama returned HTTP {error.code}: {error.reason}",
+            file=sys.stderr,
+        )
+        print(f"Host: {host}", file=sys.stderr)
         return 1
 
     except urllib.error.URLError as error:
-        print(f"Could not connect to Ollama at {host}")
-        print(f"Details: {error.reason}")
+        print(
+            f"Could not connect to Ollama at {host}",
+            file=sys.stderr,
+        )
+        print(f"Details: {error.reason}", file=sys.stderr)
         return 1
 
     except json.JSONDecodeError as error:
-        print(f"Ollama returned invalid JSON: {error}")
+        print(
+            f"Ollama returned invalid JSON: {error}",
+            file=sys.stderr,
+        )
         return 1
 
     except KeyboardInterrupt:
