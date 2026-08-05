@@ -59,7 +59,7 @@ DEFAULT_OLLAMA_HOST = os.environ.get(
     "http://ai-brain.hare-catla.ts.net:11434",
 ).rstrip("/")
 
-LOCAL_OLLAMA_HOST = "http://127.0.0.1:11434"
+LOCAL_OLLAMA_HOST = "http://207.211.172:11434"
 
 INSTALL_DIR = Path.home() / "bin"
 INSTALL_PATH = INSTALL_DIR / "ocmd"
@@ -137,10 +137,10 @@ def post_json(host: str, path: str, payload: dict) -> dict:
 
     # Ollama may return newline-delimited JSON when streaming.
     lines = raw.decode("utf-8").splitlines()
-    parsed = 
+    parsed =[
         json.loads(line)
         for line in lines
-        if [line.strip()
+        if line.strip()
     ]
 
     return parsed[-1] if parsed else {}
