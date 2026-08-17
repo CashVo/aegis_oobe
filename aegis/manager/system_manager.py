@@ -352,20 +352,10 @@ class SystemManager:
             )
             raise SystemExit(1)
 
-        # Initialize bus publisher and subscriber after Redis connection
+        # Initialize bus publisher after Redis connection
         self._bus_publisher = MessagePublisher(self.client_conn)
-        
-        async def dummy_handler(msg: AegisMessage) -> None:
-            pass
-            
-        self._bus_subscriber = MessageSubscriber(
-            redis_client=self.client_conn,
-            agent_id="system-manager",
-            handler=dummy_handler,
-            subscribe_to_broadcast=False,
-        )
-        # Start the subscriber so it's ready for agents to use
-        await self._bus_subscriber.start()
+        # Note: Each agent creates its own MessageSubscriber with its own agent_id
+        self._bus_subscriber = None
 
     async def _start_scheduler(self) -> None:
         """Initialize and start the Aegis Scheduler service."""

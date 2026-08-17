@@ -110,11 +110,9 @@ class IdentityAgent(BaseAgent):
             await self._bus_subscriber.start()
             logger.info(f"IdentityAgent created its own MessageSubscriber with agent_id={self.agent_id}")
 
-        # Subscribe to the identity stream
-        if self._bus_subscriber:
-            for channel in self.subscriptions:
-                await self._bus_subscriber.subscribe(channel, self._on_bus_message)
-            logger.info(f"IdentityAgent subscribed to: {self.subscriptions}")
+        # The subscriber's start() already subscribes to our main stream (aegis:stream:identity)
+        # No need to call subscribe() again for the main stream
+        logger.info(f"IdentityAgent subscribed to: {self.subscriptions} (via subscriber.start())")
 
         # Check if bootstrap is needed (first-run detection)
         if await self._bootstrap.needs_bootstrap():
