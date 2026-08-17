@@ -24,6 +24,7 @@ class IdentityAction(str, Enum):
     GET_USER = "get_user"
     GET_TENANT = "get_tenant"
     AUTHENTICATE = "authenticate"  # For session token issuance
+    RUN_BOOTSTRAP = "run_bootstrap"  # First-run bootstrap (bypasses auth)
 
 
 class IdentityRequest(BaseModel):
