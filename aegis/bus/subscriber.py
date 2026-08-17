@@ -35,6 +35,7 @@ from aegis.bus.constants import (
     DEFAULT_READ_COUNT,
     DEFAULT_CLAIM_MIN_IDLE_MS,
     DEFAULT_MAX_RETRIES,
+    CONSUMER_GROUP_PREFIX,
 )
 
 logger = logging.getLogger(__name__)
@@ -267,11 +268,14 @@ class MessageSubscriber:
             f"group='{group}', consumer='{consumer}'"
         )
 
+        # Get the handler for this stream (fall back to default)
+        handler = self._stream_handlers.get(stream, self._handler) if hasattr(self, '_stream_handlers') else self._handler
+
         # First, process any pending (previously claimed) messages
         pending = await self._claim_pending_messages(stream, group, consumer)
         for msg in pending:
             try:
-                await self._handler(msg)
+                await handler(msg)
             except Exception as e:
                 logger.error(
                     f"Handler error processing pending message "
@@ -316,7 +320,7 @@ class MessageSubscriber:
 
                         # Invoke handler
                         try:
-                            await self._handler(message)
+                            await handler(message)
                             await self._acknowledge(stream, group, entry_id)
                         except Exception as e:
                             logger.error(
@@ -428,3 +432,40 @@ class MessageSubscriber:
 
         self._tasks.clear()
         logger.info(f"Subscriber '{self._agent_id}' stopped.")
+
+    async def subscribe(self, stream: str, handler: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
+        """
+        Subscribe to an additional stream with a custom handler.
+        
+        This creates a new consumer group and read loop for the given stream.
+        
+        Args:
+            stream: The Redis stream key to subscribe to.
+            handler: Async callback invoked for each message dict (will be deserialized to AegisMessage).
+        """
+        if not self._running:
+            raise RuntimeError("Subscriber not started. Call start() first.")
+        
+        # Create a unique consumer group name for this stream
+        group = f"{CONSUMER_GROUP_PREFIX}{self._agent_id}:{stream.replace(':', '_')}"
+        consumer = f"{self._agent_id}-consumer-{len(self._tasks)}"
+        
+        # Ensure consumer group exists
+        await self._ensure_consumer_group(stream, group)
+        
+        # Launch a new read loop task for this stream
+        task = asyncio.create_task(
+            self._read_loop(stream, group, consumer),
+            name=f"subscriber-{self._agent_id}-{stream.replace(':', '-')}",
+        )
+        # Wrap the handler to deserialize messages before passing to handler
+        if not hasattr(self, '_stream_handlers'):
+            self._stream_handlers = {}
+        
+        async def wrapped_handler(msg: AegisMessage) -> None:
+            await handler(msg.model_dump())
+        
+        self._stream_handlers[stream] = wrapped_handler
+        self._tasks.append(task)
+        
+        logger.info(f"Subscriber '{self._agent_id}' subscribed to '{stream}'")
