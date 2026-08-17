@@ -21,7 +21,7 @@ def _make_message(action: str, payload: dict, tenant_id: str = "test-tenant", us
         tenant_id=tenant_id,
         user_id=user_id,
         action=f"identity.{action}",
-        payload=payload,
+        payload=payload,  # Action is in message.action, payload is the request payload
         priority=Priority.NORMAL,
     )
 
@@ -47,10 +47,7 @@ class TestIdentityAgentMessages:
     async def test_create_tenant_via_message(self, agent):
         msg = _make_message(
             action="create_tenant",
-            payload={
-                "action": "create_tenant",
-                "payload": {"name": "TestOrg"},
-            },
+            payload={"name": "TestOrg"},  # Direct payload, not nested
         )
         response = await agent.handle_message(msg)
         assert response is not None
@@ -62,10 +59,7 @@ class TestIdentityAgentMessages:
         # First create a tenant
         create_tenant_msg = _make_message(
             action="create_tenant",
-            payload={
-                "action": "create_tenant",
-                "payload": {"name": "UserOrg"},
-            },
+            payload={"name": "UserOrg"},
         )
         tenant_resp = await agent.handle_message(create_tenant_msg)
         tenant_id = tenant_resp.payload["data"]["tenant_id"]
@@ -74,13 +68,10 @@ class TestIdentityAgentMessages:
         msg = _make_message(
             action="create_user",
             payload={
-                "action": "create_user",
                 "tenant_id": tenant_id,
-                "payload": {
-                    "username": "newuser",
-                    "display_name": "New User",
-                    "role_name": "member",
-                },
+                "username": "newuser",
+                "display_name": "New User",
+                "role_name": "member",
             },
             tenant_id=tenant_id,
         )
@@ -93,7 +84,7 @@ class TestIdentityAgentMessages:
         # Create tenant + user
         create_tenant_msg = _make_message(
             action="create_tenant",
-            payload={"action": "create_tenant", "payload": {"name": "ListOrg"}},
+            payload={"name": "ListOrg"},
         )
         tenant_resp = await agent.handle_message(create_tenant_msg)
         tenant_id = tenant_resp.payload["data"]["tenant_id"]
@@ -104,7 +95,7 @@ class TestIdentityAgentMessages:
 
         msg = _make_message(
             action="list_users",
-            payload={"action": "list_users", "tenant_id": tenant_id},
+            payload={"tenant_id": tenant_id},
             tenant_id=tenant_id,
         )
         response = await agent.handle_message(msg)
@@ -116,7 +107,7 @@ class TestIdentityAgentMessages:
         # Create tenant + user with passphrase
         create_tenant_msg = _make_message(
             action="create_tenant",
-            payload={"action": "create_tenant", "payload": {"name": "AuthOrg"}},
+            payload={"name": "AuthOrg"},
         )
         tenant_resp = await agent.handle_message(create_tenant_msg)
         tenant_id = tenant_resp.payload["data"]["tenant_id"]
@@ -131,12 +122,9 @@ class TestIdentityAgentMessages:
         msg = _make_message(
             action="authenticate",
             payload={
-                "action": "authenticate",
                 "tenant_id": tenant_id,
-                "payload": {
-                    "username": "authuser",
-                    "passphrase": "secret123",
-                },
+                "username": "authuser",
+                "passphrase": "secret123",
             },
             tenant_id=tenant_id,
         )
