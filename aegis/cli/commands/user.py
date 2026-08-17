@@ -6,15 +6,66 @@ Routes through the Identity Agent via the bus.
 """
 
 import asyncio
+import logging
 from typing import Optional, Annotated
 import typer
 import uuid
 
 app = typer.Typer()
 
+logger = logging.getLogger(__name__)
+
 
 async def _send_identity_request(config_path: str, action: str, payload: dict) -> dict:
     """Helper: send an Identity protocol request and await the response."""
+    from aegis.config import load_config
+    from aegis.bus.redis_bus import RedisBus
+    from aegis.schemas.message import AegisMessage, MessageType
+
+    cfg = load_config(config_path)
+    bus = RedisBus(cfg)
+    await bus.connect()
+
+    correlation_id = str(uuid.uuid4())
+    response_channel = f"aegis:stream:cli:identity:{correlation_id}"
+    consumer_group = f"cli-identity-{correlation_id}"
+
+    try:
+        await bus.create_consumer_group(response_channel, consumer_group)
+    except Exception:
+        pass
+
+    msg = AegisMessage(
+        correlation_id=correlation_id,
+        source_agent="cli",
+        target_agent="identity",
+        message_type=MessageType.REQUEST,
+        tenant_id=payload.get("tenant_id", "default"),
+        user_id=payload.get("requesting_user_id", "root"),
+        action=f"identity.{action}",
+        payload=payload,
+        metadata={"response_channel": response_channel},
+    )
+    await bus.publish("aegis:stream:identity", msg)
+
+    timeout_at = asyncio.get_event_loop().time() + 15
+    result = {"success": False, "error": "timeout"}
+    while asyncio.get_event_loop().time() < timeout_at:
+        messages = await bus.consume(
+            response_channel, consumer_group, "cli", count=1, block_ms=500
+        )
+        if messages:
+            for _, data in messages:
+                parsed = AegisMessage.model_validate(data)
+                result = parsed.payload
+            break
+
+    await bus.disconnect()
+    return result
+
+
+async def _send_identity_request_with_response(config_path: str, action: str, payload: dict) -> dict:
+    """Helper: send an Identity protocol request that expects a response on a reply channel."""
     from aegis.config import load_config
     from aegis.bus.redis_bus import RedisBus
     from aegis.schemas.message import AegisMessage, MessageType
@@ -156,3 +207,79 @@ def delete(
         typer.echo(f"[✓] User {user_id} deleted.")
     else:
         typer.echo(f"[✗] {result.get('error', 'Unknown error')}", err=True)
+
+
+@app.command("bootstrap")
+def bootstrap(
+    username: Annotated[str, typer.Option("--username", "-u", help="Root username")] = "root",
+    display_name: Annotated[str, typer.Option("--name", "-n", help="Root display name")] = "System Root",
+    passphrase: Annotated[Optional[str], typer.Option("--passphrase", "-p", help="Root passphrase (optional)")] = None,
+    tenant_name: Annotated[str, typer.Option("--tenant-name", help="Initial tenant name")] = "Default",
+    config: Annotated[str, typer.Option("--config", "-c", help="Config file path")] = "aegis_config.yaml",
+) -> None:
+    """Bootstrap the identity system (first-run initialization). Creates the initial tenant and root user."""
+    async def _run_bootstrap():
+        from aegis.config import load_config
+        from aegis.bus.redis_bus import RedisBus
+        from aegis.schemas.message import AegisMessage, MessageType
+
+        cfg = load_config(config)
+        bus = RedisBus(cfg)
+        await bus.connect()
+
+        correlation_id = str(uuid.uuid4())
+        response_channel = f"aegis:stream:cli:identity:{correlation_id}"
+        consumer_group = f"cli-identity-{correlation_id}"
+
+        try:
+            await bus.create_consumer_group(response_channel, consumer_group)
+            logger.info(f"Created consumer group {consumer_group} on {response_channel}")
+        except Exception as e:
+            logger.warning(f"Consumer group creation: {e}")
+
+        # Call the Identity Agent's run_bootstrap method via the message bus
+        msg = AegisMessage(
+            correlation_id=correlation_id,
+            source_agent="cli",
+            target_agent="identity",
+            message_type=MessageType.REQUEST,
+            tenant_id="bootstrap",  # Special tenant for bootstrap
+            user_id="bootstrap",
+            action="identity.run_bootstrap",
+            payload={
+                "root_username": username,
+                "root_display_name": display_name,
+                "root_passphrase": passphrase,
+                "tenant_name": tenant_name,
+            },
+            metadata={"response_channel": response_channel},
+        )
+        logger.info(f"Publishing bootstrap request to aegis:stream:identity with response_channel={response_channel}")
+        await bus.publish("aegis:stream:identity", msg)
+
+        timeout_at = asyncio.get_event_loop().time() + 30
+        result = {"success": False, "error": "timeout"}
+        while asyncio.get_event_loop().time() < timeout_at:
+            messages = await bus.consume(
+                response_channel, consumer_group, "cli", count=1, block_ms=500
+            )
+            if messages:
+                logger.info(f"Received {len(messages)} messages from {response_channel}")
+                for _, data in messages:
+                    parsed = AegisMessage.model_validate(data)
+                    result = parsed.payload
+                break
+
+        await bus.disconnect()
+        return result
+
+    result = asyncio.run(_run_bootstrap())
+    if result.get("success"):
+        typer.echo(f"[✓] Bootstrap complete!")
+        data = result.get("data", {})
+        tenant = data.get("tenant", {})
+        root_user = data.get("root_user", {})
+        typer.echo(f"  Tenant: {tenant.get('name', 'N/A')} ({tenant.get('tenant_id', 'N/A')})")
+        typer.echo(f"  Root User: {root_user.get('username', 'N/A')} ({root_user.get('user_id', 'N/A')})")
+    else:
+        typer.echo(f"[✗] Bootstrap failed: {result.get('error', 'Unknown error')}", err=True)
