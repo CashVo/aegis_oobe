@@ -551,3 +551,29 @@ The infrastructure for a deliberately engineered system is built. Time to boot i
 
 -----
 
+## [0.12.1] - 2026-08-18
+### Fixed — Bootstrap Command Timeout Bug
+- **Root Cause:** IdentityAgent `startup()` created two consumer groups on the same Redis stream (`aegis:stream:identity`):
+  1. `MessageSubscriber` → `aegis:group:identity` (reads new messages, id=">")
+  2. `subscribe()` call for main stream → `aegis:group:identity:aegis_stream_identity` (reads from beginning, id="0")
+  This caused duplicate message processing — messages handled by both consumer groups, with CLI receiving response from failed second attempt.
+
+- **Fix Applied:**
+  - `aegis/agents/identity/agent.py`: Added legacy consumer group cleanup via `XGROUP DESTROY` at startup. Skip re-subscription to main stream since `MessageSubscriber.start()` already handles it.
+  - `aegis/manager/system_manager.py`: Added `decode_responses=True` to Redis connection to prevent byte-string "missing 'data' field" warnings.
+  - `aegis/bus/subscriber.py`: Cleaned up debug print statements. Fixed handler registration in `start()` and updated `subscribe()` to accept `AegisMessage` directly.
+
+### Updated Documentation
+- **README.md:** Complete rewrite of Quick Setup section with:
+  - Redis installation instructions (Ubuntu/macOS/Docker)
+  - First-run bootstrap command usage with examples
+  - System startup instructions
+
+### Verification
+- All 510 tests pass
+- Bootstrap command now completes successfully:
+  ```bash
+  aegis user bootstrap --username root --tenant-name Default
+  aegis start
+  ```
+
