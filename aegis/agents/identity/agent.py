@@ -26,6 +26,7 @@ from aegis.schemas.identity import (
     IdentityResponse,
 )
 from aegis.schemas.message import AegisMessage, MessageType, Priority
+from aegis.bus.constants import CONSUMER_GROUP_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,18 @@ class IdentityAgent(BaseAgent):
         logger.info(f"IdentityAgent [{self.agent_id}] started.")
         logger.info(f"  Subscriptions: {self.subscriptions}")
 
+        # Clean up legacy consumer group that was created by old subscribe() method
+        # This group (aegis:group:identity:aegis_stream_identity) was created by old code
+        # and splits message delivery without a handler
+        if self._redis_conn is not None:
+            legacy_group = f"{CONSUMER_GROUP_PREFIX}{self.agent_id}:aegis_stream_{self.agent_id}"
+            stream_name = f"aegis:stream:{self.agent_id}"
+            try:
+                await self._redis_conn.xgroup_destroy(stream_name, legacy_group)
+                logger.info(f"Cleaned up legacy consumer group '{legacy_group}' on '{stream_name}'")
+            except Exception as e:
+                logger.debug(f"Legacy group cleanup skipped (may not exist): {e}")
+
         # Always create our own MessageSubscriber for our agent_id to ensure correct consumer groups
         if self._redis_conn is not None:
             from aegis.bus.subscriber import MessageSubscriber
@@ -107,12 +120,23 @@ class IdentityAgent(BaseAgent):
                 handler=self._on_bus_message,
                 subscribe_to_broadcast=False,
             )
+            # Start the subscriber FIRST (it subscribes to our main stream)
             await self._bus_subscriber.start()
             logger.info(f"IdentityAgent created its own MessageSubscriber with agent_id={self.agent_id}")
+            logger.info(f"  Subscribed to stream: {self._bus_subscriber._stream}")
+            logger.info(f"  Consumer group: {self._bus_subscriber._group}")
+            logger.info(f"  Consumer: {self._bus_subscriber._consumer}")
 
-        # The subscriber's start() already subscribes to our main stream (aegis:stream:identity)
-        # No need to call subscribe() again for the main stream
-        logger.info(f"IdentityAgent subscribed to: {self.subscriptions} (via subscriber.start())")
+            # Now subscribe to additional channels (after start so _running is True)
+            # Skip the main stream since we're already subscribed via the subscriber
+            main_stream = self._bus_subscriber._stream
+            if self._bus_subscriber:
+                for channel in self.subscriptions:
+                    if channel == main_stream:
+                        logger.debug(f"Skipping subscription to main stream '{channel}' (already subscribed)")
+                        continue
+                    await self._bus_subscriber.subscribe(channel, self._on_bus_message)
+                logger.info(f"IdentityAgent subscribed to additional channels: {[c for c in self.subscriptions if c != main_stream]}")
 
         # Check if bootstrap is needed (first-run detection)
         if await self._bootstrap.needs_bootstrap():
@@ -131,13 +155,17 @@ class IdentityAgent(BaseAgent):
         # Handle both AegisMessage and dict (from subscriber)
         if isinstance(message, dict):
             message = AegisMessage(**message)
-        logger.info(f"IdentityAgent._on_bus_message received: action={message.action}, tenant={message.tenant_id}, user={message.user_id}")
+        logger.info(f"IdentityAgent._on_bus_message received: action={message.action}, tenant={message.tenant_id}, user={message.user_id}, metadata={message.metadata}")
         try:
             response = await self.handle_message(message)
             # handle_message returns None if it already published to response_channel
             if response and self._bus_publisher:
                 logger.info(f"Publishing response for correlation_id={response.correlation_id}")
                 await self._bus_publisher.publish(response)
+            elif response is None:
+                logger.info(f"handle_message returned None (already published to response_channel)")
+            else:
+                logger.warning(f"handle_message returned response but no bus_publisher available")
         except Exception as e:
             logger.error(f"Error processing bus message: {e}", exc_info=True)
 
@@ -221,8 +249,8 @@ class IdentityAgent(BaseAgent):
         if response_channel and self._bus_publisher:
             try:
                 logger.info(f"Publishing bootstrap response to response_channel: {response_channel}")
-                await self._bus_publisher.publish_to_stream(response_channel, response_msg)
-                logger.info(f"Successfully published bootstrap response to response_channel: {response_channel}")
+                result = await self._bus_publisher.publish_to_stream(response_channel, response_msg)
+                logger.info(f"Successfully published bootstrap response to response_channel: {response_channel}, entry_id={result}")
             except Exception as e:
                 logger.error(f"Failed to publish to response_channel {response_channel}: {e}", exc_info=True)
             return None  # Don't return the message since we published it directly

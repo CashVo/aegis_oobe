@@ -32,17 +32,41 @@ Aegis is a local-first, multi-agent AI system designed for robust, secure, and e
     pip install -e ".[dev]"
     ```
 
-4.  **Run the main entry point:**
-    This will load the configuration and confirm the system can start.
+4.  **Start Redis (required):**
     ```bash
-    python -m aegis.main
-    ```
-    or use the installed CLI script:
-    ```bash
-    aegis
+    # Ubuntu/Debian
+    sudo apt-get install redis-server
+    sudo systemctl start redis
+    
+    # macOS
+    brew install redis
+    brew services start redis
+    
+    # Docker
+    docker run -d -p 6379:6379 redis:alpine
     ```
 
-5.  **Run tests:**
+5.  **First-Run Bootstrap:**
+    On first run, the identity store is empty. You must bootstrap the system to create the initial tenant and root user:
+    ```bash
+    aegis user bootstrap --username root --tenant-name Default
+    ```
+    This creates:
+    - The "Default" tenant with all system roles (root, admin, member, observer)
+    - A root user with full (*) permissions
+    
+    You can customize the root username, display name, passphrase, and tenant name:
+    ```bash
+    aegis user bootstrap --username myadmin --name "System Admin" --passphrase "secure123" --tenant-name "MyOrg"
+    ```
+
+6.  **Start the Aegis system:**
+    ```bash
+    aegis start
+    ```
+    This launches the System Manager which starts all agents (Observer, Warden, Identity, Lexicon, Janus, Oracle, Forge, TOrchestrator) and the Mission Control web UI at http://localhost:8420.
+
+7.  **Run tests:**
     ```bash
     pytest
     ```
@@ -52,7 +76,7 @@ Aegis is a local-first, multi-agent AI system designed for robust, secure, and e
   - `agents/`: Agent implementations, starting with `base.py`.
   - `schemas/`: Pydantic models for core data structures like `AegisMessage`.
   - `config/`: Configuration loading and validation.
-  - `bus/`: (Forthcoming) Redis message bus implementation.
+  - `bus/`: Redis message bus implementation.
 - `tests/`: Unit and integration tests.
 - `pyproject.toml`: Project metadata and dependencies.
 - `aegis_config.yaml`: Default configuration file.
