@@ -32,7 +32,7 @@ async def dashboard(request: Request):
 
     # 2. Normal operational runtime workflow (for your live web server)
     try:
-        redis_ok = await bus.health_check()
+        redis_ok = await bus.ping()
         
         # Attempt to read heartbeat data
         if redis_ok:
