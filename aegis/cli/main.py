@@ -22,6 +22,7 @@ from aegis.cli.commands.start import start
 from aegis.cli.commands.stop import stop
 from aegis.cli.commands.status import status
 from aegis.cli.commands.chat import chat
+from aegis.cli.commands.install import install
 from aegis.cli.commands.user import app as user_app
 from aegis.cli.commands.tenant import app as tenant_app
 from aegis.cli.commands.memory import app as memory_app
@@ -46,6 +47,7 @@ app.command()(start)
 app.command()(stop)
 app.command()(status)
 app.command()(chat)
+app.command()(install)
 
 # ── Register sub-command groups ────────────────────────
 app.add_typer(user_app, name="user", help="User management commands.")

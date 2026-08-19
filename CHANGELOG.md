@@ -577,3 +577,30 @@ The infrastructure for a deliberately engineered system is built. Time to boot i
   aegis start
   ```
 
+-----
+
+## [0.12.2] - 2026-08-19
+### Added — `aegis install` First-Run Installation Command
+- **New CLI Command:** `aegis install` — Complete first-run automation
+  - Installs optional dependencies (web UI, MCP server)
+  - Starts Redis if not running (supports systemd, Homebrew, direct redis-server)
+  - Starts the Aegis system (all 8 agents + Mission Control web UI)
+  - Bootstraps the identity store with configurable root user and tenant
+  - Customizable via CLI options: `--username`, `--name`, `--passphrase`, `--tenant-name`
+  - Options to skip steps: `--skip-deps`, `--skip-redis`
+
+### Updated Documentation
+- **README.md:** Complete rewrite of Quick Setup section with:
+  - One-command installation (`aegis install`) as the recommended path
+  - Manual installation steps for step-by-step control
+  - Clear separation of automated vs manual setup
+
+### Verification
+- All 510 tests pass
+- One-command installation works:
+  ```bash
+  aegis install
+  # or with custom options
+  aegis install --username myadmin --name "System Admin" --passphrase "secure123" --tenant-name "MyOrg"
+  ```
+

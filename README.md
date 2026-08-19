@@ -14,6 +14,25 @@ Aegis is a local-first, multi-agent AI system designed for robust, secure, and e
 
 ## Quick Setup
 
+### One-Command Installation (Recommended)
+For the simplest first-run experience, run the automated installer:
+```bash
+aegis install
+```
+This command handles everything automatically:
+1. Installs optional dependencies (web UI, MCP server)
+2. Starts Redis if not running
+3. Starts the Aegis system
+4. Bootstraps the identity store with root user and tenant
+
+You can customize the installation:
+```bash
+aegis install --username myadmin --name "System Admin" --passphrase "secure123" --tenant-name "MyOrg"
+```
+
+### Manual Installation
+If you prefer step-by-step control:
+
 1.  **Clone the repository:**
     ```bash
     git clone <repository_url>
@@ -46,7 +65,13 @@ Aegis is a local-first, multi-agent AI system designed for robust, secure, and e
     docker run -d -p 6379:6379 redis:alpine
     ```
 
-5.  **First-Run Bootstrap:**
+5.  **Start the Aegis system:**
+    ```bash
+    aegis start
+    ```
+    This launches the System Manager which starts all agents (Observer, Warden, Identity, Lexicon, Janus, Oracle, Forge, TOrchestrator) and the Mission Control web UI at http://localhost:8420.
+
+6.  **First-Run Bootstrap** (if not using `aegis install`):
     On first run, the identity store is empty. You must bootstrap the system to create the initial tenant and root user:
     ```bash
     aegis user bootstrap --username root --tenant-name Default
@@ -59,12 +84,6 @@ Aegis is a local-first, multi-agent AI system designed for robust, secure, and e
     ```bash
     aegis user bootstrap --username myadmin --name "System Admin" --passphrase "secure123" --tenant-name "MyOrg"
     ```
-
-6.  **Start the Aegis system:**
-    ```bash
-    aegis start
-    ```
-    This launches the System Manager which starts all agents (Observer, Warden, Identity, Lexicon, Janus, Oracle, Forge, TOrchestrator) and the Mission Control web UI at http://localhost:8420.
 
 7.  **Run tests:**
     ```bash
