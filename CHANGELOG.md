@@ -551,7 +551,7 @@ The infrastructure for a deliberately engineered system is built. Time to boot i
 
 -----
 
-## [0.12.1] - 2026-08-18
+## [0.13.1] - 2026-08-18
 ### Fixed — Bootstrap Command Timeout Bug
 - **Root Cause:** IdentityAgent `startup()` created two consumer groups on the same Redis stream (`aegis:stream:identity`):
   1. `MessageSubscriber` → `aegis:group:identity` (reads new messages, id=">")
@@ -579,7 +579,7 @@ The infrastructure for a deliberately engineered system is built. Time to boot i
 
 -----
 
-## [0.12.2] - 2026-08-19
+## [0.13.2] - 2026-08-19
 ### Added — `aegis install` First-Run Installation Command
 - **New CLI Command:** `aegis install` — Complete first-run automation
   - Installs optional dependencies (web UI, MCP server)

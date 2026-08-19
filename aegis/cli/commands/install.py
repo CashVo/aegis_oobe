@@ -45,8 +45,56 @@ def check_redis_running() -> bool:
         return False
 
 
+def install_redis() -> bool:
+    """Attempt to install Redis server."""
+    typer.echo("  Installing Redis...")
+    try:
+        # Try apt (Ubuntu/Debian)
+        result = subprocess.run(
+            ["apt-get", "update", "&&", "apt-get", "install", "-y", "redis-server"],
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    try:
+        # Try brew (macOS)
+        result = subprocess.run(
+            ["brew", "install", "redis"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    try:
+        # Try dnf (Fedora/RHEL)
+        result = subprocess.run(
+            ["dnf", "install", "-y", "redis"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    typer.echo("  [✗] Could not install Redis automatically. Please install Redis manually.")
+    return False
+
+
 def start_redis() -> bool:
     """Attempt to start Redis server."""
+    # First try to start if already installed
     try:
         # Try systemctl first (systemd)
         result = subprocess.run(
@@ -81,7 +129,24 @@ def start_redis() -> bool:
         time.sleep(1)
         return check_redis_running()
     except FileNotFoundError:
-        return False
+        pass
+
+    # Redis not installed, try to install it
+    typer.echo("  Redis not found, attempting to install...")
+    if install_redis():
+        # Try starting again after installation
+        try:
+            subprocess.Popen(
+                ["redis-server", "--daemonize", "yes"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(1)
+            return check_redis_running()
+        except FileNotFoundError:
+            pass
+
+    return False
 
 
 def install_optional_deps() -> bool:
@@ -198,7 +263,7 @@ def install(
     ] = False,
     skip_redis: Annotated[
         bool,
-        typer.Option("--skip-redis", help="Skip Redis startup check"),
+        typer.Option("--skip-redis", help="Skip Redis installation and startup"),
     ] = False,
 ) -> None:
     """
@@ -206,7 +271,7 @@ def install(
 
     This command will:
     1. Install optional dependencies (web UI, MCP server)
-    2. Start Redis if not running
+    2. Install and start Redis if not running
     3. Start the Aegis system
     4. Bootstrap the identity store with root user and tenant
 
