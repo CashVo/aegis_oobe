@@ -1,0 +1,211 @@
+{# aegis/web/core/templates/partials/chart_wrapper.html #}
+{# Plotly chart container with responsive sizing and theme support #}
+
+{% macro chart_container(
+    chart_id,
+    figure_json,
+    config={},
+    class="chart-container",
+    height=400,
+    title=null,
+    description=null,
+    loading=true,
+    toolbar=true,
+    responsive=true
+) %}
+<div
+    id="{{ chart_id }}"
+    class="{{ class }}"
+    style="height: {{ height }}px; width: 100%; position: relative;"
+    data-chart-config='{{ config | tojson }}'
+    data-chart-data='{{ figure_json }}'
+>
+    {% if loading %}
+    <div class="chart-loading" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10;">
+        <div class="spinner-wrapper">
+            <div class="spinner spinner-md"></div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="chart-plot" style="height: 100%; width: 100%;"></div>
+
+    {% if title or description %}
+    <div class="chart-meta" style="margin-top: 0.75rem;">
+        {% if title %}<h4 class="chart-title">{{ title }}</h4>{% endif %}
+        {% if description %}<p class="chart-description text-muted small">{{ description }}</p>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const container = document.getElementById('{{ chart_id }}');
+    if (!container) return;
+
+    const plotDiv = container.querySelector('.chart-plot');
+    const loadingDiv = container.querySelector('.chart-loading');
+    const config = JSON.parse(container.dataset.chartConfig || '{}');
+    const figure = JSON.parse(container.dataset.chartData || '{}');
+
+    // Default config
+    const defaultConfig = {
+        displayModeBar: {{ 'true' if toolbar else 'false' }},
+        displaylogo: false,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d'],
+        responsive: {{ 'true' if responsive else 'false' }},
+        ...config
+    };
+
+    // Apply theme based on document
+    function applyTheme(fig) {
+        const isDark = document.documentElement.classList.contains('dark') ||
+                       window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        if (isDark) {
+            fig.layout = fig.layout || {};
+            fig.layout.template = 'plotly_dark';
+            fig.layout.plot_bgcolor = 'rgba(0,0,0,0)';
+            fig.layout.paper_bgcolor = 'rgba(0,0,0,0)';
+            fig.layout.font = fig.layout.font || {};
+            fig.layout.font.color = '#e0e0e0';
+        }
+        return fig;
+    }
+
+    // Render chart
+    function renderChart() {
+        if (loadingDiv) loadingDiv.style.display = 'none';
+
+        const themedFigure = applyTheme(JSON.parse(JSON.stringify(figure)));
+
+        if (window.Plotly) {
+            window.Plotly.newPlot(plotDiv, themedFigure.data, themedFigure.layout, defaultConfig)
+                .then(() => {
+                    // Add click handler for drill-down
+                    plotDiv.on('plotly_click', function(data) {
+                        const point = data.points[0];
+                        if (point && point.customdata) {
+                            // Emit custom event for drill-down
+                            window.dispatchEvent(new CustomEvent('chart:click', {
+                                detail: { chartId: '{{ chart_id }}', point: point }
+                            }));
+                        }
+                    });
+                })
+                .catch(err => {
+                    console.error('Chart render error:', err);
+                    if (loadingDiv) {
+                        loadingDiv.innerHTML = '<div class="text-danger">Failed to render chart</div>';
+                        loadingDiv.style.display = 'flex';
+                    }
+                });
+        } else {
+            // Plotly not loaded yet, wait for it
+            window.addEventListener('plotly:ready', renderChart, { once: true });
+        }
+    }
+
+    // Re-render on theme change
+    const observer = new MutationObserver(() => {
+        if (window.Plotly && plotDiv.data) {
+            renderChart();
+        }
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    // Initial render
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderChart);
+    } else {
+        renderChart();
+    }
+})();
+</script>
+{% endmacro %}
+
+{% macro chart_row(charts, cols=2) %}
+<div class="chart-grid chart-grid-{{ cols }}">
+    {% for chart in charts %}
+    <div class="chart-card">
+        {{ chart_container(
+            chart_id=chart.id,
+            figure_json=chart.figure_json,
+            config=chart.config,
+            height=chart.height or 350,
+            title=chart.title,
+            description=chart.description,
+            toolbar=chart.toolbar !== false
+        ) | safe }}
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro filter_bar(chart_id, filters, on_change="updateChart") %}
+<div class="chart-filters mb-3" data-chart-id="{{ chart_id }}">
+    {% for filter in filters %}
+    <div class="filter-item">
+        <label for="{{ chart_id }}-{{ filter.key }}" class="form-label small">{{ filter.label }}</label>
+        {% if filter.type == 'select' %}
+        <select
+            class="form-select form-select-sm"
+            id="{{ chart_id }}-{{ filter.key }}"
+            name="{{ filter.key }}"
+            hx-get="{{ filter.url }}"
+            hx-target="#{{ chart_id }}"
+            hx-swap="outerHTML"
+            hx-include="closest .chart-filters"
+        >
+            {% for option in filter.options %}
+            <option value="{{ option.value }}" {% if filter.value == option.value %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+        {% elif filter.type == 'date_range' %}
+        <div class="input-group input-group-sm">
+            <input
+                type="datetime-local"
+                class="form-control"
+                id="{{ chart_id }}-{{ filter.key }}-start"
+                name="{{ filter.key }}_start"
+                value="{{ filter.start_value or '' }}"
+                hx-get="{{ filter.url }}"
+                hx-target="#{{ chart_id }}"
+                hx-swap="outerHTML"
+                hx-include="closest .chart-filters"
+                hx-trigger="change delay:500ms"
+            >
+            <span class="input-group-text">to</span>
+            <input
+                type="datetime-local"
+                class="form-control"
+                id="{{ chart_id }}-{{ filter.key }}-end"
+                name="{{ filter.key }}_end"
+                value="{{ filter.end_value or '' }}"
+                hx-get="{{ filter.url }}"
+                hx-target="#{{ chart_id }}"
+                hx-swap="outerHTML"
+                hx-include="closest .chart-filters"
+                hx-trigger="change delay:500ms"
+            >
+        </div>
+        {% elif filter.type == 'multiselect' %}
+        <select
+            class="form-select form-select-sm"
+            id="{{ chart_id }}-{{ filter.key }}"
+            name="{{ filter.key }}"
+            multiple
+            hx-get="{{ filter.url }}"
+            hx-target="#{{ chart_id }}"
+            hx-swap="outerHTML"
+            hx-include="closest .chart-filters"
+        >
+            {% for option in filter.options %}
+            <option value="{{ option.value }}" {% if filter.value and option.value in filter.value %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}

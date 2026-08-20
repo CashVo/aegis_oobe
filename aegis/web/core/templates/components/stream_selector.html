@@ -1,0 +1,89 @@
+{# aegis/web/core/templates/components/stream_selector.html #}
+{# Stream selector component #}
+
+{% macro stream_selector(
+    name="stream",
+    label="Stream",
+    streams=[],
+    selected=null,
+    placeholder="Select stream...",
+    class="",
+    hx_get=null,
+    hx_target=null,
+    hx_trigger="change",
+    hx_include=null,
+    show_all=true,
+    group_by_agent=true
+) %}
+<div class="stream-selector {{ class }}">
+    <label for="{{ name }}" class="form-label">{{ label }}</label>
+
+    <select
+        class="form-select"
+        id="{{ name }}"
+        name="{{ name }}"
+        {% if hx_get %}hx-get="{{ hx_get }}" hx-target="{{ hx_target }}" hx-trigger="{{ hx_trigger }}" hx-include="{{ hx_include or 'closest form' }}"{% endif %}
+        data-placeholder="{{ placeholder }}"
+    >
+        {% if show_all %}
+        <option value="" {% if not selected %}selected{% endif %}>All Streams</option>
+        {% endif %}
+
+        {% if group_by_agent %}
+        {% set agent_streams = {} %}
+        {% for stream in streams %}
+        {% set agent_id = stream.agent_id or 'unknown' %}
+        {% if agent_id not in agent_streams %}{% set _ = agent_streams.update({agent_id: []}) %}{% endif %}
+        {% set _ = agent_streams[agent_id].append(stream) %}
+        {% endfor %}
+
+        {% for agent_id, agent_streams_list in agent_streams.items() %}
+        <optgroup label="{{ agent_id }} {% if agent_streams_list[0].is_broadcast %}(Broadcast){% endif %}">
+            {% for stream in agent_streams_list %}
+            <option value="{{ stream.name }}" {% if stream.name == selected %}selected{% endif %}>
+                {{ stream.name }} ({{ stream.length }} msgs, {{ stream.pending_count }} pending)
+            </option>
+            {% endfor %}
+        </optgroup>
+        {% endfor %}
+        {% else %}
+        {% for stream in streams %}
+        <option value="{{ stream.name }}" {% if stream.name == selected %}selected{% endif %}>
+            {{ stream.name }} ({{ stream.length }} msgs)
+        </option>
+        {% endfor %}
+        {% endif %}
+    </select>
+</div>
+{% endmacro %}
+
+{% macro stream_badge(stream, size="sm", show_stats=true) %}
+<span class="stream-badge stream-badge-{{ size }} badge bg-{{ 'info' if stream.is_broadcast else 'primary' }} d-inline-flex align-items-center gap-1">
+    <span>{{ stream.name }}</span>
+    {% if show_stats %}
+    <span class="badge bg-secondary ms-1">{{ stream.length }}</span>
+    {% if stream.pending_count > 0 %}
+    <span class="badge bg-warning text-dark ms-1">{{ stream.pending_count }} pending</span>
+    {% endif %}
+    {% endif %}
+</span>
+{% endmacro %}
+
+{% macro stream_list(streams, max_visible=10, clickable=false, click_url=null) %}
+<div class="stream-list">
+    {% for stream in streams[:max_visible] %}
+    <div class="stream-item d-flex align-items-center justify-content-between p-2 {% if clickable %}clickable{% endif %}"
+         {% if clickable and click_url %}hx-get="{{ click_url|replace('__STREAM__', stream.name) }}" hx-target="#stream-detail" hx-swap="innerHTML"{% endif %}>
+        {{ stream_badge(stream, 'sm', true) | safe }}
+        {% if stream.consumer_groups > 0 %}
+        <small class="text-muted">{{ stream.consumer_groups }} consumer group{{ 's' if stream.consumer_groups > 1 else '' }}</small>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if streams|length > max_visible %}
+    <div class="text-center p-2 text-muted">
+        <small>+{{ streams|length - max_visible }} more streams</small>
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}

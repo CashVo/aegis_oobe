@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Aegis Mission Control{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/mc-components.css">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" defer></script>
+    <script src="/static/js/mc-core.js" defer></script>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -15,19 +18,65 @@
         </div>
         <div class="nav-links">
             <a href="/">Dashboard</a>
+            <a href="/redis-bus">Redis Bus</a>
             <a href="/chat">Chat</a>
             <a href="/memory">Memory</a>
             <a href="/users">Users</a>
             <a href="/schedule">Schedule</a>
             <a href="/logs">Logs</a>
         </div>
+        <div class="nav-actions">
+            <button class="btn btn-ghost btn-sm" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme (Ctrl+Shift+L)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sun-icon" style="display:none;">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="moon-icon">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
+        </div>
     </nav>
-    <main class="container">
+    <main class="container" id="main-content">
         {% block content %}{% endblock %}
     </main>
     <footer class="footer">
         <p>Project Aegis v0.12.0 · Local-First Multi-Agent System</p>
     </footer>
     {% block scripts %}{% endblock %}
+    <script>
+    // Theme toggle handler
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('theme-toggle');
+        const sunIcon = toggle.querySelector('.sun-icon');
+        const moonIcon = toggle.querySelector('.moon-icon');
+
+        function updateIcons() {
+            const isDark = document.documentElement.classList.contains('dark');
+            sunIcon.style.display = isDark ? 'block' : 'none';
+            moonIcon.style.display = isDark ? 'none' : 'block';
+        }
+
+        toggle.addEventListener('click', function() {
+            if (window.MC && MC.theme) {
+                MC.theme.toggle();
+            } else {
+                document.documentElement.classList.toggle('dark');
+            }
+            updateIcons();
+        });
+
+        // Listen for theme changes
+        window.addEventListener('theme:change', updateIcons);
+        updateIcons();
+    });
+    </script>
 </body>
 </html>
