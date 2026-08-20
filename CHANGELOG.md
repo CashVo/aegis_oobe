@@ -604,3 +604,150 @@ The infrastructure for a deliberately engineered system is built. Time to boot i
   aegis install --username myadmin --name "System Admin" --passphrase "secure123" --tenant-name "MyOrg"
   ```
 
+-----
+
+## [SYSTEM SNAPSHOT - 2026-08-20] — Architecture Assessment & OOBE Evaluation
+
+**Purpose:** This snapshot captures the current state of Aegis as assessed on 2026-08-20. It serves as a baseline for future improvements and a reference for architectural decisions. This entry is intentionally detailed to capture nuanced architectural observations that may inform future development priorities.
+
+---
+
+### 📸 SYSTEM SNAPSHOT - 2026-08-20
+
+**Version:** 0.13.2 (Genesis OOBE Complete)  
+**Test Status:** 510/510 tests passing  
+**Last Commit:** a2a90e1 (utils/dev.py + delete-aegis)
+
+---
+
+#### 🎯 FIRST-RUN EXPERIENCE (OOBE) ASSESSMENT
+
+**Current State: ✅ Functional**
+- `aegis install` — One-command automation (deps, Redis, system, bootstrap)
+- `aegis start` — Full system startup with health checks
+- `aegis user bootstrap` — Manual bootstrap for custom configurations
+- Health endpoints functional (Mission Control + Observer)
+- Bootstrap creates root user + Default tenant with all system roles
+
+**Improvements Identified:**
+| Priority | Improvement | Effort | Impact |
+|----------|-------------|--------|--------|
+| High | Interactive setup wizard (`aegis setup`) | Medium | Reduces friction for new users |
+| High | Progress indicators/spinners during install | Low | Better perceived performance |
+| Medium | Post-install health verification | Low | Confidence in successful setup |
+| Medium | Docker Compose one-liner | Low | Container-native deployments |
+| Medium | Migration/upgrade path detection | Medium | Existing user retention |
+| Low | Config validation pre-flight | Low | Early error detection |
+| Low | Interactive onboarding prompts | Medium | Guided first-run |
+
+---
+
+#### ⚙️ UVICORN + VENV CLARIFICATION
+
+**Current Implementation: ✅ Correct**
+- `python -m venv .venv` creates isolated Python environment
+- `pip install -e ".[dev]"` installs deps including `uvicorn`
+- `aegis start` → `uvicorn.Server(uvicorn.Config(...)).serve()` runs ASGI app
+- Virtual environment isolates deps; Uvicorn runs the ASGI app inside it
+
+**No fix needed** — Architecture is correct. The confusion stemmed from README showing venv creation before `aegis start`.
+
+---
+
+#### 🏗️ OUT-OF-BOX CAPABILITIES vs USER-PROVIDED
+
+**✅ OUT OF THE BOX (after `aegis install`):**
+| Capability | Agent | Details |
+|------------|-------|---------|
+| Multi-tenant Identity | Identity | Root user, tenant, 4 roles (root/admin/member/observer) |
+| Security/Authorization | Warden | RBAC, shell allowlist, emergency bypass, interception |
+| Observability | Observer | Heartbeats, metrics, health endpoint, structured logging |
+| Memory (6 tiers) | Lexicon | L0-L5: Core, Domain, Workflow, Episodic, Artifact, Scratchpad |
+| Governance | Janus | 12 default policies, safe DSL evaluator |
+| LLM Gateway | Oracle | Ollama + OpenAI-compatible, caching, rate limiting |
+| Execution | Forge | 11 tools (file, shell, git, http, json, schedule) |
+| Skills | Forge | 6 skills (web, summarize, git, redteam, RLM, onboard) |
+| Orchestration | TOrchestrator | Intent parsing, decomposition, sessions, synthesis |
+| Interfaces | CLI/Web/MCP | Dashboard, chat, memory, users, schedule, logs |
+| Scheduling | Scheduler | Cron, interval, one-time, persistent JobStore |
+| System Mgmt | SysMgr | Ordered startup/shutdown, health, auto-restart |
+
+**👤 USER MUST PROVIDE/BUILD:**
+| Category | What's Needed | Effort |
+|----------|---------------|--------|
+| LLM Models | Run Ollama locally or provide OpenAI-compatible API | Low (install) |
+| Custom Skills/Tools | Domain-specific automation (e.g., Jira, Slack, DB) | Medium |
+| Custom Policies | Org-specific governance rules | Low-Medium |
+| Integrations | External APIs, databases, services | Medium-High |
+| Frontend Customization | Custom dashboards, branding | Low-Medium |
+| Domain Knowledge | L0 (identity), L1 (docs), L2 (workflows) | Ongoing |
+| Infrastructure | Redis (required), optional PostgreSQL, monitoring | Low |
+
+---
+
+#### ⏰ CRON JOBS STATUS
+**Current:** No default cron jobs pre-configured. Scheduler runs but JobStore is empty.
+**Recommendation:** Add default maintenance jobs (log rotation, metric eviction, backup triggers) in future.
+
+---
+
+#### 🏛️ ARCHITECTURE ASSESSMENT
+
+**Overall: WELL-BALANCED — Not too complex, not too primitive**
+
+**✅ STRENGTHS (Keep/Enhance):**
+- **Clear separation of concerns** — Each agent single responsibility
+- **Event-driven via Redis Streams** — Decoupled, scalable, observable
+- **Agent Registry** — Dynamic management with priority ordering
+- **Protocol-first** — Typed AegisMessage envelopes for all communication
+- **Security-first** — Warden intercepts ALL messages
+- **Self-monitoring** — Observer self-heartbeat (RT-3), auto-restart (RT-4)
+- **Protocol-first schemas** — Type-safe inter-agent contracts
+
+**⚠️ COULD SIMPLIFY (Reduce Complexity):**
+| Component | Issue | Recommendation |
+|-----------|-------|----------------|
+| 12 Chunks | Too many granular chunks | Merge related (e.g., Observer+Logger, Forge+Skills) |
+| 6 Memory Tiers | L0-L5 complex for OOBE | Start with 3 (Core, Domain, Episodic); add L2/L4/L5 as needed |
+| Skill/Tool Manifests | Verbose boilerplate | Decorator-based registration |
+| Schema Duplication | Overlap between agent schemas | Consolidate shared schemas |
+| MCP Server | Optional/standalone | Make pluggable, not core |
+
+**❌ MISSING FOR PRODUCTION OOBE (Add These):**
+| Capability | Priority | Description |
+|------------|----------|-------------|
+| Plugin System | High | Dynamic agent/skill loading from external packages |
+| Distributed Tracing | High | OpenTelemetry integration out of box |
+| Secret Management | High | Vault/keyring integration for API keys |
+| Backup/Restore | High | Automated backup of all stores (SQLite + Redis) |
+| Multi-node HA | Medium | Leader election for System Manager |
+| Webhook System | Medium | External event ingestion |
+| Plugin Marketplace | Medium | Skill/tool discovery and installation |
+| Evaluation Framework | Medium | Skill/agent testing harness |
+| Migration System | Medium | Schema/db versioning and migration |
+| Webhook System | Medium | External event ingestion |
+
+---
+
+#### 📊 COMPLEXITY VERDICT
+
+**Not too complex, not too primitive — RIGHT LEVEL for the ambition.**
+
+The modular agent design with Redis Streams is the right abstraction level. The main gaps are **operational tooling** (backups, HA, secrets) and **developer experience** (plugins, marketplace, evaluation). The core architecture supports these additions without fundamental changes.
+
+---
+
+#### 🎯 RECOMMENDED NEXT 3 PRIORITIES
+
+1. **Plugin System + Marketplace** — Enables ecosystem growth without core changes
+2. **Backup/Restore + HA** — Production readiness
+3. **Distributed Tracing + Secret Management** — Observability + Security foundations
+
+---
+
+**Snapshot Complete.** This baseline will be referenced for future architectural decisions and improvement tracking.
+
+-----
+
+"
+
