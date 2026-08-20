@@ -886,3 +886,36 @@ body {
 
 .overflow-auto { overflow: auto !important; }
 .overflow-hidden { overflow: hidden !important; }
+
+/* Footer */
+.footer {
+    padding: 1.5rem 1rem;
+    border-top: 1px solid var(--mc-border);
+    text-align: center;
+    color: var(--mc-text-muted);
+    font-size: 0.8125rem;
+}
+
+.footer-links {
+    margin-top: 0.5rem;
+}
+
+.footer-links a {
+    display: inline-flex;
+    align-items: center;
+    color: var(--mc-text-muted);
+    text-decoration: none;
+    transition: var(--mc-transition);
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--mc-radius);
+}
+
+.footer-links a:hover {
+    color: var(--mc-primary);
+    background: var(--mc-primary-muted);
+}
+
+.footer-links svg {
+    flex-shrink: 0;
+}
