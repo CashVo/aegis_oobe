@@ -17,6 +17,7 @@ from aegis.schemas.oracle import ModelDefinition, ProviderConfig
 from aegis.agents.oracle.providers.base import LLMProvider
 from aegis.agents.oracle.providers.ollama import OllamaProvider
 from aegis.agents.oracle.providers.openai_compat import OpenAICompatProvider
+from aegis.agents.oracle.providers.openrouter import OpenRouterProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -52,6 +53,67 @@ DEFAULT_MODELS: dict[str, dict] = {
         "supports_embeddings": True,
         "max_output_tokens": 0,
     },
+    # OpenRouter free tier models (via OpenRouterProvider with tiered fallback)
+    "nemotron-3-ultra": {
+        "llm_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "provider": "openrouter",
+        "display_name": "Nemotron 3 Ultra (OpenRouter Free)",
+        "context_window": 128000,
+        "preference_tags": ["cloud", "capable", "complex", "default"],
+        "supports_json_mode": True,
+        "supports_embeddings": False,
+        "max_output_tokens": 4096,
+    },
+    "llama-3.1-405b": {
+        "llm_id": "meta-llama/llama-3.1-405b-instruct:free",
+        "provider": "openrouter",
+        "display_name": "Llama 3.1 405B (OpenRouter Free)",
+        "context_window": 128000,
+        "preference_tags": ["cloud", "capable", "complex"],
+        "supports_json_mode": True,
+        "supports_embeddings": False,
+        "max_output_tokens": 4096,
+    },
+    "gemma-2-27b": {
+        "llm_id": "google/gemma-2-27b-it:free",
+        "provider": "openrouter",
+        "display_name": "Gemma 2 27B (OpenRouter Free)",
+        "context_window": 8192,
+        "preference_tags": ["cloud", "fast"],
+        "supports_json_mode": True,
+        "supports_embeddings": False,
+        "max_output_tokens": 4096,
+    },
+    "mistral-nemo": {
+        "llm_id": "mistralai/mistral-nemo:free",
+        "provider": "openrouter",
+        "display_name": "Mistral Nemo (OpenRouter Free)",
+        "context_window": 128000,
+        "preference_tags": ["cloud", "long_ctx"],
+        "supports_json_mode": True,
+        "supports_embeddings": False,
+        "max_output_tokens": 4096,
+    },
+    "qwen-2.5-72b": {
+        "llm_id": "qwen/qwen-2.5-72b-instruct:free",
+        "provider": "openrouter",
+        "display_name": "Qwen 2.5 72B (OpenRouter Free)",
+        "context_window": 32768,
+        "preference_tags": ["cloud", "multilingual"],
+        "supports_json_mode": True,
+        "supports_embeddings": False,
+        "max_output_tokens": 4096,
+    },
+    "llama-3.1-70b": {
+        "llm_id": "meta-llama/llama-3.1-70b-instruct:free",
+        "provider": "openrouter",
+        "display_name": "Llama 3.1 70B (OpenRouter Free)",
+        "context_window": 128000,
+        "preference_tags": ["cloud", "fallback"],
+        "supports_json_mode": True,
+        "supports_embeddings": False,
+        "max_output_tokens": 4096,
+    },
 }
 
 DEFAULT_PROVIDERS: dict[str, dict] = {
@@ -63,12 +125,23 @@ DEFAULT_PROVIDERS: dict[str, dict] = {
         "max_concurrent": 4,
         "max_retries": 3,
     },
+    "openrouter": {
+        "provider_type": "openrouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "enabled": True,
+        "timeout_seconds": 60,
+        "max_concurrent": 8,
+        "max_retries": 3,
+        "api_key_env": "OPENROUTER_API_KEY",
+        "default_model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    },
 }
 
 # Maps provider_type strings to their implementation class
 PROVIDER_CLASS_MAP: dict[str, type[LLMProvider]] = {
     "ollama": OllamaProvider,
     "openai_compat": OpenAICompatProvider,
+    "openrouter": OpenRouterProvider,
 }
 
 
