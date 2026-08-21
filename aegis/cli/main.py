@@ -13,6 +13,7 @@ Usage:
     aegis memory ...     Memory search / export / import
     aegis schedule ...   Scheduler management
     aegis config ...     Configuration management
+    aegis secrets ...    Secret/Key management
 """
 
 import typer
@@ -28,6 +29,7 @@ from aegis.cli.commands.tenant import app as tenant_app
 from aegis.cli.commands.memory import app as memory_app
 from aegis.cli.commands.schedule import app as schedule_app
 from aegis.cli.commands.config import app as config_app
+from aegis.cli.commands.secrets import app as secrets_app
 
 app = typer.Typer(
     name="aegis",
@@ -55,6 +57,7 @@ app.add_typer(tenant_app, name="tenant", help="Tenant management commands.")
 app.add_typer(memory_app, name="memory", help="Lexicon memory commands.")
 app.add_typer(schedule_app, name="schedule", help="Scheduler management commands.")
 app.add_typer(config_app, name="config", help="Configuration commands.")
+app.add_typer(secrets_app, name="secrets", help="Secret/Key management commands.")
 
 
 def main() -> None:

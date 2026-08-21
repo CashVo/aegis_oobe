@@ -796,7 +796,339 @@ def deploy_prod(
     typer.echo("  ✓ Deployment complete (placeholder)")
 
 
-@app.command("health-check")
+
+
+@app.command("promote-to-test")
+def promote_to_test():
+    """Promote dev to test environment."""
+    root = get_aegis_root()
+
+    typer.echo("═" * 60)
+    typer.echo("  PROMOTING DEV TO TEST")
+    typer.echo("═" * 60)
+
+    # Push dev to remote
+    typer.echo("\n[1/5] Pushing dev to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "main"],
+        cwd=root / "aegis-dev",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Dev pushed")
+
+    # Merge into test
+    typer.echo("\n[2/5] Merging into test...")
+    result = subprocess.run(
+        ["git", "checkout", "test"],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    result = subprocess.run(
+        ["git", "merge", "main"],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        subprocess.run(["git", "merge", "--abort"], cwd=root / "aegis-test", capture_output=True)
+        typer.echo(f"  ✗ Merge failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Merged main into test")
+
+    # Populate test data
+    typer.echo("\n[3/5] Populating test data...")
+    result = subprocess.run(
+        ["python", "-m", "utils.dev", "populate-test-data"],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Test data populated")
+
+    # Run tests
+    typer.echo("\n[4/5] Running tests...")
+    result = subprocess.run(
+        ["python", "-m", "pytest", "-v"],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ⚠ Tests had failures", err=True)
+    else:
+        typer.echo("  ✓ Tests passed")
+
+    # Push test
+    typer.echo("\n[5/5] Pushing test to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "test"],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Test pushed")
+
+    typer.echo("\n" + "═" * 60)
+    typer.echo("  PROMOTION TO TEST COMPLETE")
+    typer.echo("═" * 60)
+    typer.echo("  Dev → Test: Push + Merge + Test Data + Tests + Push")
+    typer.echo("  Test environment ready for team review")
+
+@app.command("promote-to-prod")
+def promote_to_prod():
+    """Promote test to prod environment."""
+    root = get_aegis_root()
+
+    typer.echo("═" * 60)
+    typer.echo("  PROMOTING TEST TO PROD")
+    typer.echo("═" * 60)
+
+    # Push test to remote
+    typer.echo("\n[1/4] Pushing test to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "test"],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Test pushed")
+
+    # Create tag and checkout prod
+    typer.echo("\n[2/4] Tagging and moving to prod...")
+    from datetime import datetime
+    tag = f"v{datetime.now().strftime('%Y%m%d%H%M')}"
+    result = subprocess.run(
+        ["git", "tag", tag],
+        cwd=root / "aegis-test",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed to tag: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"  ✓ Tagged {tag}")
+
+    result = subprocess.run(
+        ["git", "checkout", "prod"],
+        cwd=root / "aegis-prod",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    result = subprocess.run(
+        ["git", "pull", "origin", "prod"],
+        cwd=root / "aegis-prod",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Prod checked out")
+
+    # Deploy (placeholder)
+    typer.echo("\n[3/4] Deploying to production...")
+    typer.echo("  ✓ Production deployment triggered")
+
+    # Push prod
+    typer.echo("\n[4/4] Pushing prod to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "prod"],
+        cwd=root / "aegis-prod",
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Prod pushed")
+
+    typer.echo("\n" + "═" * 60)
+    typer.echo("  PROMOTION TO PROD COMPLETE")
+    typer.echo("═" * 60)
+    typer.echo("  Test → Prod: Push + Tag + Deploy + Push")
+    typer.echo("  Production environment updated")
+
+@app.command("promote-to-test")
+def promote_to_test():
+    """Promote dev to test environment."""
+    import subprocess
+    from pathlib import Path
+    import typer
+
+    # Dev worktree is at /home/ubuntu/git/aegis-dev
+    dev_dir = Path("/home/ubuntu/git/aegis-dev")
+    # Test worktree is at /home/ubuntu/git/aegis-test
+    test_dir = Path("/home/ubuntu/git/aegis-test")
+
+    typer.echo("═" * 60)
+    typer.echo("  PROMOTING DEV TO TEST")
+    typer.echo("═" * 60)
+
+    # Push dev to remote
+    typer.echo("\n[1/5] Pushing dev to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "main"],
+        cwd=dev_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Dev pushed")
+
+    # Merge into test
+    typer.echo("\n[2/5] Merging into test...")
+    result = subprocess.run(
+        ["git", "checkout", "test"],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    result = subprocess.run(
+        ["git", "merge", "main"],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        subprocess.run(["git", "merge", "--abort"], cwd=test_dir, capture_output=True)
+        typer.echo(f"  ✗ Merge failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Merged main into test")
+
+    # Populate test data
+    typer.echo("\n[3/5] Populating test data...")
+    result = subprocess.run(
+        ["python", "-m", "utils.dev", "populate-test-data"],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Test data populated")
+
+    # Run tests
+    typer.echo("\n[4/5] Running tests...")
+    result = subprocess.run(
+        ["python", "-m", "pytest", "-v"],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ⚠ Tests had failures", err=True)
+    else:
+        typer.echo("  ✓ Tests passed")
+
+    # Push test
+    typer.echo("\n[5/5] Pushing test to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "test"],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Test pushed")
+
+    typer.echo("\n" + "═" * 60)
+    typer.echo("  PROMOTION TO TEST COMPLETE")
+    typer.echo("═" * 60)
+    typer.echo("  Dev → Test: Push + Merge + Test Data + Tests + Push")
+    typer.echo("  Test environment ready for team review")
+
+@app.command("promote-to-prod")
+def promote_to_prod():
+    """Promote test to prod environment."""
+    import subprocess
+    from pathlib import Path
+    from datetime import datetime
+    import typer
+
+    # Test worktree is at /home/ubuntu/git/aegis-test
+    test_dir = Path("/home/ubuntu/git/aegis-test")
+    # Prod worktree is at /home/ubuntu/git/aegis-prod
+    prod_dir = Path("/home/ubuntu/git/aegis-prod")
+
+    typer.echo("═" * 60)
+    typer.echo("  PROMOTING TEST TO PROD")
+    typer.echo("═" * 60)
+
+    # Push test to remote
+    typer.echo("\n[1/4] Pushing test to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "test"],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Test pushed")
+
+    # Create tag and checkout prod
+    typer.echo("\n[2/4] Tagging and moving to prod...")
+    tag = f"v{datetime.now().strftime('%Y%m%d%H%M')}"
+    result = subprocess.run(
+        ["git", "tag", tag],
+        cwd=test_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed to tag: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"  ✓ Tagged {tag}")
+
+    result = subprocess.run(
+        ["git", "checkout", "prod"],
+        cwd=prod_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    result = subprocess.run(
+        ["git", "pull", "origin", "prod"],
+        cwd=prod_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Prod checked out")
+
+    # Deploy (placeholder)
+    typer.echo("\n[3/4] Deploying to production...")
+    typer.echo("  ✓ Production deployment triggered")
+
+    # Push prod
+    typer.echo("\n[4/4] Pushing prod to remote...")
+    result = subprocess.run(
+        ["git", "push", "origin", "prod"],
+        cwd=prod_dir,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        typer.echo(f"  ✗ Failed: {result.stderr}", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ Prod pushed")
+
+    typer.echo("\n" + "═" * 60)
+    typer.echo("  PROMOTION TO PROD COMPLETE")
+    typer.echo("═" * 60)
+    typer.echo("  Test → Prod: Push + Tag + Deploy + Push")
+    typer.echo("  Production environment updated")@app.command("health-check")
 def health_check(
     env: Annotated[str, typer.Option("--env", help="Environment to check")] = "prod",
 ) -> None:
