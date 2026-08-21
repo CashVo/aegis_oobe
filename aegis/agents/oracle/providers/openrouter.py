@@ -43,7 +43,7 @@ class OpenRouterProvider(LLMProvider):
         super().__init__(config)
         self._router = None
         self._api_key_env = config.api_key_env or "OPENROUTER_API_KEY"
-        self._model_id = config.default_model or "nvidia/nemotron-3-ultra-550b-a55b:free"
+        self._model_id = config.default_model or "nvidia/nemotron-3-ultra:free"
 
     def _get_router(self):
         """Lazy-load the ModelRouter from work-tracker."""

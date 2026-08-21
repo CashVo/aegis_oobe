@@ -54,15 +54,15 @@ Two interconnected systems:
 - **Hermes integration**: Via profile config → `model_router` plugin
 - **Aegis integration**: `OracleAgent` uses `ModelRouter` directly
 
-### Tier Chain (Validated Free Models, Aug 2026)
+### Tier Chain (Validated Free Models, Aug 2026 - Updated per user feedback)
 ```python
 TIER_CHAIN = [
-    {"id": "nvidia/nemotron-3-ultra-550b-a55b:free",    "ctx": 128_000, "tokenizer": "cl100k_base", "priority": "complex"},
-    {"id": "meta-llama/llama-3.1-405b-instruct:free",    "ctx": 128_000, "tokenizer": "llama3",      "priority": "complex"},
-    {"id": "google/gemma-2-27b-it:free",                 "ctx": 8_192,   "tokenizer": "gemma",       "priority": "fast"},
-    {"id": "mistralai/mistral-nemo:free",                "ctx": 128_000, "tokenizer": "mistral",     "priority": "long_ctx"},
-    {"id": "qwen/qwen-2.5-72b-instruct:free",            "ctx": 32_768,  "tokenizer": "qwen",        "priority": "multilingual"},
-    {"id": "meta-llama/llama-3.1-70b-instruct:free",     "ctx": 128_000, "tokenizer": "llama3",      "priority": "fallback"},
+    {"id": "nvidia/nemotron-3-ultra:free",            "ctx": 128_000, "tokenizer": "cl100k_base", "priority": "complex"},
+    {"id": "nvidia/nemotron-3.5-lightning:free",       "ctx": 128_000, "tokenizer": "cl100k_base", "priority": "fast"},
+    {"id": "google/gemma-4-26b-a4b:free",              "ctx": 8_192,   "tokenizer": "cl100k_base", "priority": "complex"},
+    {"id": "google/gemma-4-31b:free",                  "ctx": 8_192,   "tokenizer": "cl100k_base", "priority": "complex"},
+    {"id": "zai/glm-5.2:free",                         "ctx": 32_768,  "tokenizer": "cl100k_base", "priority": "multilingual"},
+    {"id": "gpt-oss-20b:free",                         "ctx": 32_768,  "tokenizer": "cl100k_base", "priority": "fallback"},
 ]
 ```
 
