@@ -1,0 +1,183 @@
+{# aegis/web/core/templates/partials/table.html #}
+{# Reusable sortable, filterable, paginated table #}
+
+{% macro data_table(
+    columns,
+    rows,
+    sortable=true,
+    pagination=null,
+    row_click_url=null,
+    row_id_field="id",
+    empty_message="No data available",
+    actions=null,
+    striped=true,
+    hover=true,
+    responsive=true
+) %}
+<div class="table-wrapper {% if responsive %}table-responsive{% endif %}">
+    {% if rows %}
+    <table class="data-table {% if striped %}table-striped{% endif %} {% if hover %}table-hover{% endif %}">
+        <thead>
+            <tr>
+                {% for col in columns %}
+                <th
+                    {% if col.sortable and sortable %}
+                    class="sortable"
+                    data-sort="{{ col.key }}"
+                    hx-get="{{ request.url.path }}"
+                    hx-params="*"
+                    hx-trigger="click"
+                    hx-target="#table-container"
+                    hx-swap="innerHTML"
+                    style="cursor: pointer;"
+                    {% endif %}
+                    {% if col.width %}style="width: {{ col.width }};"{% endif %}
+                    {% if col.align %}class="{{ col.align }}"{% endif %}
+                >
+                    <div class="th-content">
+                        <span>{{ col.label }}</span>
+                        {% if col.sortable and sortable %}
+                        <span class="sort-indicator">
+                            {% if pagination and pagination.sort == col.key %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                {% if pagination.sort_dir == "asc" %}
+                                <polyline points="18 15 12 9 6 15"></polyline>
+                                {% else %}
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                                {% endif %}
+                            </svg>
+                            {% else %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+                                <polyline points="18 15 12 9 6 15"></polyline>
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                </th>
+                {% endfor %}
+                {% if actions %}
+                <th class="actions-col">Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr
+                {% if row_click_url %}
+                hx-get="{{ row_click_url|replace('__ID__', row[row_id_field]|string) }}"
+                hx-target="#detail-modal .modal-content"
+                hx-swap="innerHTML"
+                data-bs-toggle="modal"
+                data-bs-target="#detail-modal"
+                class="clickable-row"
+                {% endif %}
+                data-row-id="{{ row[row_id_field]|string }}"
+            >
+                {% for col in columns %}
+                <td data-col="{{ col.key }}">
+                    {% if col.render %}
+                    {{ col.render(row) | safe }}
+                    {% elif col.format %}
+                    {{ col.format(row[col.key]) | safe }}
+                    {% else %}
+                    {{ row[col.key] }}
+                    {% endif %}
+                </td>
+                {% endfor %}
+                {% if actions %}
+                <td class="actions-col">
+                    <div class="action-menu">
+                        <button class="btn btn-ghost btn-sm action-trigger" aria-label="Actions">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="1"></circle>
+                                <circle cx="19" cy="12" r="1"></circle>
+                                <circle cx="5" cy="12" r="1"></circle>
+                            </svg>
+                        </button>
+                        <div class="action-dropdown">
+                            {% for action in actions %}
+                            {% if not action.condition or action.condition(row) %}
+                            <button
+                                class="action-item"
+                                hx-post="{{ action.url|replace('__ID__', row[row_id_field]|string) }}"
+                                hx-target="closest tr"
+                                hx-swap="outerHTML"
+                                hx-confirm="{{ action.confirm }}"
+                                {% if action.csrf %}hx-headers='{"X-CSRF-Token": "{{ csrf_token() }}}"{% endif %}
+                            >
+                                {% if action.icon %}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    {% if action.icon == "delete" %}
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    {% elif action.icon == "edit" %}
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    {% elif action.icon == "move" %}
+                                    <polyline points="5 9 2 12 5 15"></polyline>
+                                    <polyline points="9 5 12 2 15 5"></polyline>
+                                    <polyline points="15 19 12 22 9 19"></polyline>
+                                    <polyline points="19 9 22 12 19 15"></polyline>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    <line x1="12" y1="2" x2="12" y2="22"></line>
+                                    {% elif action.icon == "play" %}
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                    {% elif action.icon == "pause" %}
+                                    <rect x="6" y="4" width="4" height="16"></rect>
+                                    <rect x="14" y="4" width="4" height="16"></rect>
+                                    {% elif action.icon == "refresh" %}
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                                    <polyline points="1 4 1 10 7 10"></polyline>
+                                    <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                                    {% endif %}
+                                </svg>
+                                {% endif %}
+                                {{ action.label }}
+                            </button>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if pagination and pagination.total_pages and pagination.total_pages > 1 %}
+    <nav class="pagination" aria-label="Pagination">
+        {% if pagination.has_prev %}
+        <a href="#" class="page-link" hx-get="{{ request.url.path }}" hx-params="*" hx-vals='{"page": {{ pagination.prev_page }}}' hx-target="#table-container" hx-swap="innerHTML">&laquo; Prev</a>
+        {% else %}
+        <span class="page-link disabled">&laquo; Prev</span>
+        {% endif %}
+
+        <span class="page-info">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
+
+        {% if pagination.has_next %}
+        <a href="#" class="page-link" hx-get="{{ request.url.path }}" hx-params="*" hx-vals='{"page": {{ pagination.next_page }}}' hx-target="#table-container" hx-swap="innerHTML">Next &raquo;</a>
+        {% else %}
+        <span class="page-link disabled">Next &raquo;</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="table-empty">
+        {{ empty_state(icon="inbox", title=empty_message) | safe }}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro column(key, label, sortable=true, width=null, align=null, render=null, format=null) %}
+{{ {"key": key, "label": label, "sortable": sortable, "width": width, "align": align, "render": render, "format": format} }}
+{% endmacro %}
+
+{% macro action(label, url, icon=null, confirm=null, condition=null, csrf=false) %}
+{{ {"label": label, "url": url, "icon": icon, "confirm": confirm, "condition": condition, "csrf": csrf} }}
+{% endmacro %}

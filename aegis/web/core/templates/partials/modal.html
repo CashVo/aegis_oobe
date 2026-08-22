@@ -1,0 +1,175 @@
+{# aegis/web/core/templates/partials/modal.html #}
+{# Reusable modal component #}
+
+{% macro modal(
+    id,
+    title,
+    size="lg",
+    close_button=true,
+    footer=null,
+    body_class="",
+    header_class="",
+    backdrop="static",
+    keyboard=true
+) %}
+<div
+    class="modal fade"
+    id="{{ id }}"
+    tabindex="-1"
+    aria-labelledby="{{ id }}-label"
+    aria-hidden="true"
+    data-bs-backdrop="{{ backdrop }}"
+    data-bs-keyboard="{{ 'true' if keyboard else 'false' }}"
+>
+    <div class="modal-dialog modal-{{ size }} modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header {{ header_class }}">
+                <h5 class="modal-title" id="{{ id }}-label">{{ title }}</h5>
+                {% if close_button %}
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                {% endif %}
+            </div>
+            <div class="modal-body {{ body_class }}" id="{{ id }}-body">
+                {{ caller() if caller else '' }}
+            </div>
+            {% if footer %}
+            <div class="modal-footer">
+                {{ footer | safe }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro modal_trigger(
+    target_modal,
+    label,
+    url,
+    method="get",
+    btn_class="btn btn-primary btn-sm",
+    icon=null,
+    hx_target=null,
+    hx_swap="innerHTML",
+    hx_indicator=null
+) %}
+<button
+    type="button"
+    class="{{ btn_class }}"
+    data-bs-toggle="modal"
+    data-bs-target="#{{ target_modal }}"
+    hx-{{ method }}="{{ url }}"
+    hx-target="{{ hx_target or '#' + target_modal + '-body' }}"
+    hx-swap="{{ hx_swap }}"
+    {% if hx_indicator %}hx-indicator="{{ hx_indicator }}"{% endif %}
+>
+    {% if icon %}
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+        {% if icon == "view" %}
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+        {% elif icon == "edit" %}
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        {% elif icon == "delete" %}
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        {% elif icon == "play" %}
+        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        {% elif icon == "pause" %}
+        <rect x="6" y="4" width="4" height="16"></rect>
+        <rect x="14" y="4" width="4" height="16"></rect>
+        {% elif icon == "refresh" %}
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+        <polyline points="1 4 1 10 7 10"></polyline>
+        <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+        {% elif icon == "move" %}
+        <polyline points="5 9 2 12 5 15"></polyline>
+        <polyline points="9 5 12 2 15 5"></polyline>
+        <polyline points="15 19 12 22 9 19"></polyline>
+        <polyline points="19 9 22 12 19 15"></polyline>
+        <line x1="2" y1="12" x2="22" y2="12"></line>
+        <line x1="12" y1="2" x2="12" y2="22"></line>
+        {% endif %}
+    </svg>
+    {% endif %}
+    {{ label }}
+</button>
+{% endmacro %}
+
+{% macro confirm_modal(
+    id,
+    title,
+    message,
+    confirm_text="Confirm",
+    cancel_text="Cancel",
+    confirm_class="btn btn-danger",
+    cancel_class="btn btn-secondary",
+    confirm_url=null,
+    confirm_method="post",
+    hx_target="body",
+    hx_swap="none"
+) %}
+<div
+    class="modal fade"
+    id="{{ id }}"
+    tabindex="-1"
+    aria-labelledby="{{ id }}-label"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="{{ id }}-label">{{ title }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>{{ message }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="{{ cancel_class }}" data-bs-dismiss="modal">{{ cancel_text }}</button>
+                {% if confirm_url %}
+                <button
+                    type="button"
+                    class="{{ confirm_class }}"
+                    hx-{{ confirm_method }}="{{ confirm_url }}"
+                    hx-target="{{ hx_target }}"
+                    hx-swap="{{ hx_swap }}"
+                    data-bs-dismiss="modal"
+                >
+                    {{ confirm_text }}
+                </button>
+                {% else %}
+                <button type="button" class="{{ confirm_class }}" id="{{ id }}-confirm">{{ confirm_text }}</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro toast(
+    id,
+    message,
+    type="info",
+    auto_hide=true,
+    delay=5000,
+    position="top-end"
+) %}
+<div
+    class="toast align-items-center text-bg-{{ type }} border-0"
+    id="{{ id }}"
+    role="alert"
+    aria-live="assertive"
+    aria-atomic="true"
+    data-bs-autohide="{{ 'true' if auto_hide else 'false' }}"
+    data-bs-delay="{{ delay }}"
+    style="position: fixed; {{ position }}: 1rem; z-index: 1080;"
+>
+    <div class="d-flex">
+        <div class="toast-body">{{ message }}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>
+{% endmacro %}

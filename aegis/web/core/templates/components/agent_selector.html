@@ -1,0 +1,83 @@
+{# aegis/web/core/templates/components/agent_selector.html #}
+{# Agent multi-select component with search #}
+
+{% macro agent_selector(
+    name="agents",
+    label="Agents",
+    agents=[],
+    selected=[],
+    multiple=true,
+    searchable=true,
+    placeholder="Select agents...",
+    class="",
+    hx_get=null,
+    hx_target=null,
+    hx_trigger="change",
+    hx_include=null,
+    include_all=true
+) %}
+<div class="agent-selector {{ class }}">
+    <label for="{{ name }}" class="form-label">{{ label }}</label>
+
+    <select
+        class="form-select {% if searchable %}select2-hidden-accessible{% endif %}"
+        id="{{ name }}"
+        name="{{ name }}"
+        {% if multiple %}multiple{% endif %}
+        {% if hx_get %}hx-get="{{ hx_get }}" hx-target="{{ hx_target }}" hx-trigger="{{ hx_trigger }}" hx-include="{{ hx_include or 'closest form' }}"{% endif %}
+        {% if placeholder %}data-placeholder="{{ placeholder }}"{% endif %}
+    >
+        {% if include_all %}
+        <option value="" {% if not selected %}selected{% endif %}>All Agents</option>
+        {% endif %}
+        {% for agent in agents %}
+        <option value="{{ agent.id }}" {% if agent.id in selected %}selected{% endif %}>
+            {{ agent.name or agent.id }} {% if agent.status %}<span class="badge badge-{{ 'success' if agent.status == 'running' else 'warning' }}">{{ agent.status }}</span>{% endif %}
+        </option>
+        {% endfor %}
+    </select>
+
+    {% if searchable %}
+    <script>
+    (function() {
+        const select = document.getElementById('{{ name }}');
+        if (!select || window.jQuery === undefined || !window.jQuery.fn.select2) {
+            // Fallback: native select with datalist
+            return;
+        }
+        jQuery(select).select2({
+            width: '100%',
+            placeholder: '{{ placeholder }}',
+            allowClear: true,
+            closeOnSelect: !{{ 'true' if multiple else 'false' }},
+        });
+    })();
+    </script>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro agent_pill(agent, removable=false, remove_url=null, size="sm") %}
+<span class="agent-pill agent-pill-{{ size }} badge bg-{{ 'success' if agent.status == 'running' else 'secondary' }} d-inline-flex align-items-center gap-1">
+    <span>{{ agent.name or agent.id }}</span>
+    {% if agent.status %}
+    <span class="status-dot status-{{ agent.status }}"></span>
+    {% endif %}
+    {% if removable and remove_url %}
+    <a href="#" class="agent-remove" hx-delete="{{ remove_url|replace('__ID__', agent.id) }}" hx-target="closest .agent-pill" hx-swap="outerHTML" aria-label="Remove">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </a>
+    {% endif %}
+</span>
+{% endmacro %}
+
+{% macro agent_list(agents, max_visible=5, removable=false, remove_url=null) %}
+<div class="agent-list d-flex flex-wrap gap-1">
+    {% for agent in agents[:max_visible] %}
+    {{ agent_pill(agent, removable, remove_url) | safe }}
+    {% endfor %}
+    {% if agents|length > max_visible %}
+    <span class="agent-pill agent-pill-{{ 'sm' if max_visible <= 5 else 'md' }} badge bg-secondary">+{{ agents|length - max_visible }} more</span>
+    {% endif %}
+</div>
+{% endmacro %}

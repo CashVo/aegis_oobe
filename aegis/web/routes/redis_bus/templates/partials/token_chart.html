@@ -1,0 +1,110 @@
+{# aegis/web/routes/redis_bus/templates/partials/token_chart.html #}
+{% import "partials/chart_wrapper.html" as chart_macros %}
+
+<div class="token-chart">
+    <!-- Chart Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">Token Usage - {{ stream }}</h6>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" 
+                    hx-get="/redis-bus/partials/token-chart/{{ stream }}"
+                    hx-target="#token-chart-container"
+                    hx-include="closest form"
+                    hx-swap="outerHTML">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                </svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="stats-card stats-card-primary">
+                <div class="stats-content">
+                    <div class="stats-label">Total Messages</div>
+                    <div class="stats-value">{{ data.total_messages }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card stats-card-success">
+                <div class="stats-content">
+                    <div class="stats-label">Total Tokens</div>
+                    <div class="stats-value">{{ data.total_tokens | int | format_number }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card stats-card-info">
+                <div class="stats-content">
+                    <div class="stats-label">Avg/Message</div>
+                    <div class="stats-value">{{ "%.1f" | format(data.avg_tokens_per_message) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card stats-card-warning">
+                <div class="stats-content">
+                    <div class="stats-label">Estimated</div>
+                    <div class="stats-value">
+                        {% set estimated_count = data.data_points | selectattr('estimated', 'equalto', true) | list | length %}
+                        {{ estimated_count }}/{{ data.total_messages }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+        <div class="card-body p-0">
+            {{ chart_macros.chart_container(
+                chart_id="token-chart-" + stream | replace(':', '-'),
+                figure_json=chart.figure_json,
+                config=chart.config,
+                height=450,
+                title="Per-Message Token Usage",
+                description="Stacked bar chart showing prompt (blue) + completion (green) tokens per message",
+                toolbar=true
+            ) | safe }}
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="card mt-3">
+        <div class="card-header">
+            <h6 class="mb-0">Message Details</h6>
+        </div>
+        <div class="card-body p-0">
+            {% import "partials/table.html" as table_macros %}
+            {{ table_macros.data_table(
+                columns=[
+                    table_macros.column('timestamp', 'Time', sortable=true, format=lambda x: x | format_datetime),
+                    table_macros.column('source_agent', 'From', sortable=true),
+                    table_macros.column('target_agent', 'To', sortable=true),
+                    table_macros.column('action', 'Action', sortable=true),
+                    table_macros.column('prompt_tokens', 'Prompt', sortable=true, align='text-end', format='number'),
+                    table_macros.column('completion_tokens', 'Completion', sortable=true, align='text-end', format='number'),
+                    table_macros.column('total_tokens', 'Total', sortable=true, align='text-end', format='number'),
+                    table_macros.column('estimated', 'Estimated', sortable=true, align='text-center',
+                        format=lambda x: '<span class="badge bg-' + ('warning' if x else 'success') + '">' + ('Yes' if x else 'No') + '</span>'),
+                ],
+                rows=data.data_points,
+                sortable=true,
+                pagination=None,
+                row_click_url="/redis-bus/partials/message-detail/" + stream + "/__ID__",
+                row_id_field="entry_id",
+                empty_message="No token data available",
+                actions=[
+                    table_macros.action('View', '/redis-bus/partials/message-detail/' + stream + '/__ID__', 'view'),
+                ]
+            ) | safe }}
+        </div>
+    </div>
+</div>

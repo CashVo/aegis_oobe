@@ -38,6 +38,9 @@ from aegis.manager.agent_registry import (
     get_startup_order,
 )
 from aegis.manager.scheduler import AegisScheduler
+from aegis.bus.publisher import MessagePublisher
+from aegis.bus.subscriber import MessageSubscriber
+from aegis.schemas.message import AegisMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -206,6 +209,10 @@ class SystemManager:
         self._shutdown_event = asyncio.Event()
         self._running = False
 
+        # Bus publisher and subscriber for agent communication
+        self._bus_publisher: Optional[MessagePublisher] = None
+        self._bus_subscriber: Optional[MessageSubscriber] = None
+
         # Initialize agent states from registry
         for entry in AGENT_REGISTRY:
             self._agents[entry.agent_id] = AgentState(entry)
@@ -325,7 +332,7 @@ class SystemManager:
                 port = getattr(self.client_config, "port", 6379)
                 db = getattr(self.client_config, "db", 0)
 
-            self.client_conn = aioredis.Redis(host=host, port=port, db=db)
+            self.client_conn = aioredis.Redis(host=host, port=port, db=db, decode_responses=True)
             pong = await self.client_conn.ping()
             if pong:
                 logger.info("[Redis] Connected to %s:%s (db=%s)", host, port, db)
@@ -345,6 +352,10 @@ class SystemManager:
             )
             raise SystemExit(1)
 
+        # Initialize bus publisher after Redis connection
+        self._bus_publisher = MessagePublisher(self.client_conn)
+        # Note: Each agent creates its own MessageSubscriber with its own agent_id
+        self._bus_subscriber = None
 
     async def _start_scheduler(self) -> None:
         """Initialize and start the Aegis Scheduler service."""
@@ -400,12 +411,14 @@ class SystemManager:
 
         try:
             # Instantiate the agent
-            # Agents may accept config, redis_conn, etc.
+            # Agents may accept config, redis_conn, bus_publisher, bus_subscriber, etc.
             agent_config = self._config.get(entry.config_key, {}) if entry.config_key else {}
             try:
                 instance = cls(
                     config=agent_config,
                     redis_conn=self.client_conn,
+                    bus_publisher=self._bus_publisher,
+                    bus_subscriber=self._bus_subscriber,
                 )
             except TypeError:
                 # Fallback if agent doesn't accept these kwargs
@@ -656,9 +669,9 @@ class SystemManager:
         if identity_state is None or identity_state.instance is None:
             return
 
-        if hasattr(identity_state.instance, "is_first_run"):
+        if hasattr(identity_state.instance, "needs_bootstrap"):
             try:
-                is_first = await identity_state.instance.is_first_run()
+                is_first = await identity_state.instance.needs_bootstrap()
                 if is_first:
                     logger.info(
                         "=" * 60 + "\n"

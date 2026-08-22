@@ -73,13 +73,14 @@ class ModelDefinition(BaseModel):
 
 class ProviderConfig(BaseModel):
     """Configuration for an LLM provider backend."""
-    provider_type: str  # "ollama", "openai_compat"
+    provider_type: str  # "ollama", "openai_compat", "openrouter"
     base_url: str = "http://localhost:11434"
     api_key_env: Optional[str] = None
     enabled: bool = True
     timeout_seconds: int = 120
     max_concurrent: int = 4
     max_retries: int = 3
+    default_model: Optional[str] = None  # For OpenRouter provider
 
 
 class EmbeddingRequest(BaseModel):

@@ -1,0 +1,140 @@
+{# aegis/web/core/templates/partials/stats_card.html #}
+{# Reusable metric/stat card component #}
+
+{% macro stats_card(
+    label,
+    value,
+    trend=null,
+    icon=null,
+    color="primary",
+    href=null,
+    clickable=false,
+    subtitle=null,
+    format="number"
+) %}
+<div class="stats-card stats-card-{{ color }} {% if clickable %}clickable{% endif %}" {% if href %}hx-get="{{ href }}" hx-target="#main-content" hx-push-url="true"{% endif %}>
+    <div class="stats-icon stats-icon-{{ color }}">
+        {% if icon %}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            {% if icon == "messages" %}
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            {% elif icon == "streams" %}
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+            <path d="M12 3v18"></path>
+            {% elif icon == "pending" %}
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+            {% elif icon == "error" %}
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+            {% elif icon == "tokens" %}
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+            {% elif icon == "latency" %}
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            {% elif icon == "agents" %}
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            {% elif icon == "throughput" %}
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+            {% else %}
+            <circle cx="12" cy="12" r="10"></circle>
+            {% endif %}
+        </svg>
+        {% else %}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+        </svg>
+        {% endif %}
+    </div>
+    <div class="stats-content">
+        <div class="stats-label">{{ label }}</div>
+        <div class="stats-value {% if format == 'bytes' %}font-mono{% endif %}">
+            {% if format == 'number' %}
+            {{ value | int | format_number }}
+            {% elif format == 'bytes' %}
+            {{ format_bytes(value) }}
+            {% elif format == 'duration' %}
+            {{ format_duration(value) }}
+            {% elif format == 'rate' %}
+            {{ value | float | format_number }}/s
+            {% else %}
+            {{ value }}
+            {% endif %}
+        </div>
+        {% if trend is not none %}
+        <div class="stats-trend {% if trend > 0 %}trend-up{% elif trend < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+            {% if trend > 0 %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+            {% elif trend < 0 %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 6 10.5 15.5 15.5 10.5 23 18"></polyline>
+                <polyline points="7 6 1 6 1 12"></polyline>
+            </svg>
+            {% else %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            {% endif %}
+            <span>{{ "+%.1f%%" | format(trend) if trend > 0 else "%.1f%%" | format(trend) if trend < 0 else "No change" }}</span>
+        </div>
+        {% endif %}
+        {% if subtitle %}
+        <div class="stats-subtitle">{{ subtitle }}</div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro stats_grid(cards, cols=4) %}
+<div class="stats-grid stats-grid-{{ cols }}">
+    {% for card in cards %}
+    {{ stats_card(
+        label=card.label,
+        value=card.value,
+        trend=card.trend,
+        icon=card.icon,
+        color=card.color or 'primary',
+        href=card.href,
+        clickable=card.clickable or false,
+        subtitle=card.subtitle,
+        format=card.format or 'number'
+    ) | safe }}
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Template filters for formatting #}
+{% macro format_number(value) %}
+{{ "{:,.0f}".format(value) if value is not none else "—" }}
+{% endmacro %}
+
+{% macro format_bytes(bytes) %}
+{% if bytes is none %}—
+{% elif bytes < 1024 %}{{ bytes }} B
+{% elif bytes < 1024**2 %}{{ "%.1f" | format(bytes / 1024) }} KB
+{% elif bytes < 1024**3 %}{{ "%.1f" | format(bytes / 1024**2) }} MB
+{% else %}{{ "%.1f" | format(bytes / 1024**3) }} GB
+{% endif %}
+{% endmacro %}
+
+{% macro format_duration(ms) %}
+{% if ms is none %}—
+{% elif ms < 1000 %}{{ "%.0f" | format(ms) }} ms
+{% elif ms < 60000 %}{{ "%.1f" | format(ms / 1000) }} s
+{% elif ms < 3600000 %}{{ "%.1f" | format(ms / 60000) }} m
+{% else %}{{ "%.1f" | format(ms / 3600000) }} h
+{% endif %}
+{% endmacro %}

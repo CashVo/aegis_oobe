@@ -76,6 +76,7 @@ def create_app(config: Any = None) -> FastAPI:
     from aegis.web.routes.schedule import router as schedule_router
     from aegis.web.routes.logs import router as logs_router
     from aegis.web.routes.health import router as health_router
+    from aegis.web.routes.redis_bus import router as redis_bus_router
 
     app.include_router(dashboard_router)
     app.include_router(chat_router)
@@ -84,5 +85,6 @@ def create_app(config: Any = None) -> FastAPI:
     app.include_router(schedule_router)
     app.include_router(logs_router)
     app.include_router(health_router)
+    app.include_router(redis_bus_router)
 
     return app

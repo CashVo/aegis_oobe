@@ -26,7 +26,7 @@ async def health(request: Request) -> JSONResponse:
 
     if bus:
         try:
-            redis_ok = await bus.health_check()
+            redis_ok = await bus.ping()
         except Exception:
             redis_ok = False
 
