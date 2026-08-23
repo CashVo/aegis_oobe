@@ -330,7 +330,22 @@ def install(
         # Give the system a moment to fully initialize
         await asyncio.sleep(2)
 
-        success = await run_bootstrap(username, display_name, passphrase, tenant_name, config)
+        # Check if bootstrap is needed (fresh install vs re-run)
+        from aegis.identity.store import IdentityStore
+        from aegis.config import load_config
+        cfg = load_config(config)
+        data_dir = cfg.data_dir
+        db_path = f"{data_dir}/identity.db"
+        store = IdentityStore(db_path=db_path)
+        await store.initialize()
+        needs_bootstrap = await store.is_empty()
+        await store.close()
+        
+        if not needs_bootstrap:
+            typer.echo("  [!] Identity store already has tenants — skipping bootstrap (re-run detected)")
+            success = True
+        else:
+            success = await run_bootstrap(username, display_name, passphrase, tenant_name, config)
 
         if success:
             typer.echo("  [✓] Bootstrap complete!")
