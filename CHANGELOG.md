@@ -5,6 +5,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0] - 2026-08-23
+### Restored
+- **aegis_config.yaml** — Restored the default configuration template that was lost during the chunk13-frx merge (commit 2bec458). The file had been empty (`{}`) since the secrets management and workflow promotion merge.
+- **Oracle Configuration** — Added complete OpenRouter provider with 7 free tier models (Nemotron 3 Ultra, Nemotron 3.5 Lightning, Gemma 4 26B, Gemma 4 31B, GLM 5.2, GPT-OSS 20B) supporting tiered fallback via work-tracker ModelRouter.
+- **New Subsystem Configs** — Added configurations for Janus (API Gateway), Warden (Authorization), Identity (User/Tenant with Argon2), Observer (Observability), and Forge (Task Execution).
+- **Enhanced Oracle Subsystems** — Response cache, rate limiting, token budget management, and prompt templates all fully configured.
+- **Provider Configuration** — Both Ollama (local) and OpenRouter (cloud) providers enabled with proper defaults for tiered model selection.
+
+### Fixed
+- Config file now loads correctly through all code paths: `aegis.config.loader.load_config()`, `SystemManager._load_config()`, `OracleAgent`, `LLMRegistry`, and CLI `aegis config show`.
+
+---
+
 ## [0.1.0] - CHUNK-001 - 2026-04-23
 
 ### Added
