@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Config file now loads correctly through all code paths: `aegis.config.loader.load_config()`, `SystemManager._load_config()`, `OracleAgent`, `LLMRegistry`, and CLI `aegis config show`.
 - `aegis install` bootstrap phase — Fixed issue where bootstrap failed if identity store already contained tenants from previous runs. Added pre-bootstrap check to detect fresh installs vs re-runs. The install now works correctly on both fresh systems and re-runs.
+- `aegis start` — Added missing `plotly` dependency to web extra and install command. Added graceful error handling when web dependencies are not installed.
 
 ---
 

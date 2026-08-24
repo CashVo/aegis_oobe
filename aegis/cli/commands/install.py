@@ -28,6 +28,7 @@ OPTIONAL_DEPS = [
     "jinja2>=3.1.4",
     "python-multipart>=0.0.9",
     "mcp>=1.0.0",
+    "plotly>=5.0.0",
 ]
 
 
