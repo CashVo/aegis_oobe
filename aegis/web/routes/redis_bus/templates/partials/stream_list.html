@@ -1,0 +1,151 @@
+{# aegis/web/routes/redis_bus/templates/partials/stream_list.html #}
+{% import "partials/stats_card.html" as macros %}
+{% import "partials/table.html" as table_macros %}
+
+<div class="row g-3" id="stream-cards">
+    {% for stream in streams %}
+    <div class="col-xl-3 col-lg-4 col-md-6">
+        <div class="card h-100 stream-card {% if stream.is_broadcast %}stream-broadcast{% endif %}"
+             hx-get="/redis-bus/partials/stream-detail/{{ stream.name }}"
+             hx-target="#stream-detail-body"
+             hx-swap="innerHTML"
+             data-bs-toggle="modal"
+             data-bs-target="#stream-detail-modal">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge bg-{{ 'info' if stream.is_broadcast else 'primary' }} me-2">
+                        {{ 'Broadcast' if stream.is_broadcast else 'Agent' }}
+                    </span>
+                    <strong class="text-truncate d-inline-block" style="max-width: 200px;">{{ stream.name }}</strong>
+                </div>
+                {% if stream.pending_count > 0 %}
+                <span class="badge bg-warning text-dark">{{ stream.pending_count }} pending</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <div class="row text-center g-2 mb-3">
+                    <div class="col-4">
+                        <div class="stats-value font-mono">{{ stream.length | int | format_number }}</div>
+                        <div class="stats-label">Messages</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="stats-value font-mono">{{ stream.msgs_per_sec | float | format_number }}</div>
+                        <div class="stats-label">Msg/s</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="stats-value font-mono">{{ stream.consumer_groups }}</div>
+                        <div class="stats-label">Consumers</div>
+                    </div>
+                </div>
+
+                <div class="stream-meta small text-muted">
+                    <div class="d-flex justify-content-between">
+                        <span>Oldest:</span>
+                        <span>{{ stream.oldest_timestamp | format_datetime if stream.oldest_timestamp else '—' }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Newest:</span>
+                        <span>{{ stream.newest_timestamp | format_datetime if stream.newest_timestamp else '—' }}</span>
+                    </div>
+                    {% if stream.consumer_groups_detail %}
+                    <div class="d-flex justify-content-between mt-2">
+                        <span>Groups:</span>
+                        <span>{{ stream.consumer_groups_detail | length }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer bg-transparent border-top-0">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary flex-grow-1"
+                            hx-get="/redis-bus/partials/stream-detail/{{ stream.name }}"
+                            hx-target="#stream-detail-body"
+                            hx-swap="innerHTML"
+                            data-bs-toggle="modal"
+                            data-bs-target="#stream-detail-modal"
+                            hx-trigger="click">
+                        View Messages
+                    </button>
+                    {% if stream.pending_count > 0 %}
+                    <button class="btn btn-sm btn-outline-warning"
+                            hx-get="/redis-bus/partials/stream-pending/{{ stream.name }}"
+                            hx-target="#stream-detail-body"
+                            hx-swap="innerHTML"
+                            data-bs-toggle="modal"
+                            data-bs-target="#stream-detail-modal">
+                        Pending
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        {{ macros.empty_state(icon="streams", title="No streams found", description="No Redis streams matching the current filters.") | safe }}
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Also provide table view -->
+<div class="mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5>Table View</h5>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="stream-view-cards" data-view="cards">Cards</button>
+            <button class="btn btn-outline-secondary active" id="stream-view-table" data-view="table">Table</button>
+        </div>
+    </div>
+
+    <div id="stream-table-view" class="table-responsive">
+        {{ table_macros.data_table(
+            columns=[
+                table_macros.column('name', 'Stream', sortable=true, width='250px'),
+                table_macros.column('agent_id', 'Agent', sortable=true),
+                table_macros.column('length', 'Messages', sortable=true, align='text-end', format='number'),
+                table_macros.column('msgs_per_sec', 'Msg/s', sortable=true, align='text-end', format=lambda x: '%.2f' % x),
+                table_macros.column('pending_count', 'Pending', sortable=true, align='text-end', format='number',
+                    render=lambda row: '<span class="badge bg-' + ('warning text-dark' if row.pending_count > 0 else 'success') + '">' + (row.pending_count | int | format_number) + '</span>'),
+                table_macros.column('consumer_groups', 'Consumers', sortable=true, align='text-end', format='number'),
+                table_macros.column('oldest_timestamp', 'Oldest', sortable=true, format=lambda x: x | format_datetime if x else '—'),
+                table_macros.column('newest_timestamp', 'Newest', sortable=true, format=lambda x: x | format_datetime if x else '—'),
+            ],
+            rows=streams,
+            sortable=true,
+            pagination=None,
+            row_click_url="/redis-bus/partials/stream-detail/__ID__",
+            row_id_field="name",
+            empty_message="No streams found",
+            actions=[
+                table_macros.action('Messages', '/redis-bus/partials/stream-detail/__ID__', 'view', condition=lambda r: True),
+                table_macros.action('Pending', '/redis-bus/partials/stream-pending/__ID__', 'clock', condition=lambda r: r.pending_count > 0),
+            ]
+        ) | safe }}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cardsView = document.getElementById('stream-cards');
+    const tableView = document.getElementById('stream-table-view');
+    const btnCards = document.getElementById('stream-view-cards');
+    const btnTable = document.getElementById('stream-view-table');
+
+    function showCards() {
+        cardsView.style.display = 'grid';
+        tableView.style.display = 'none';
+        btnCards.classList.add('active');
+        btnTable.classList.remove('active');
+    }
+
+    function showTable() {
+        cardsView.style.display = 'none';
+        tableView.style.display = 'block';
+        btnTable.classList.add('active');
+        btnCards.classList.remove('active');
+    }
+
+    btnCards?.addEventListener('click', showCards);
+    btnTable?.addEventListener('click', showTable);
+});
+</script>

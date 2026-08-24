@@ -1,0 +1,165 @@
+{# aegis/web/routes/redis_bus/templates/partials/stream_detail.html #}
+{% import "partials/table.html" as table_macros %}
+{% import "partials/stats_card.html" as macros %}
+
+<div class="stream-detail">
+    <!-- Stream Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="mb-1">
+                <span class="badge bg-{{ 'info' if stream.is_broadcast else 'primary' }} me-2">
+                    {{ 'Broadcast' if stream.is_broadcast else 'Agent' }}
+                </span>
+                {{ stream.name }}
+            </h5>
+            <small class="text-muted">Agent: {{ stream.agent_id }}</small>
+        </div>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" hx-get="/redis-bus/partials/stream-detail/{{ stream.name }}" hx-target="#stream-detail-body" hx-swap="innerHTML">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                </svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Stream Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Total Messages", value=stream.length, icon="messages", color="primary", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Pending", value=stream.pending_count, icon="pending", color="warning", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Throughput", value=stream.msgs_per_sec, icon="throughput", color="success", format="rate") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Consumer Groups", value=stream.consumer_groups, icon="agents", color="info", format="number") | safe }}
+        </div>
+    </div>
+
+    <!-- Consumer Groups -->
+    {% if stream.consumer_groups_detail %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Consumer Groups</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Group</th>
+                            <th>Consumers</th>
+                            <th>Pending</th>
+                            <th>Lag</th>
+                            <th>Oldest Pending</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in stream.consumer_groups_detail %}
+                        <tr>
+                            <td><code>{{ group.name }}</code></td>
+                            <td>{{ group.consumers }}</td>
+                            <td>
+                                {% if group.pending > 0 %}
+                                <span class="badge bg-warning text-dark">{{ group.pending }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ group.lag }}</td>
+                            <td>
+                                {% if group.oldest_pending_age_ms %}
+                                {{ (group.oldest_pending_age_ms / 1000) | format_duration }}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Messages Table -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">Recent Messages</h6>
+        <div class="btn-group btn-group-sm">
+            <form class="d-flex gap-1" hx-get="/redis-bus/partials/stream-detail/{{ stream.name }}" hx-target="#stream-detail-body" hx-trigger="submit" hx-swap="innerHTML">
+                <input type="hidden" name="page" value="1">
+                <select class="form-select form-select-sm" name="message_type" style="width: auto;">
+                    <option value="">All Types</option>
+                    <option value="request">Request</option>
+                    <option value="response">Response</option>
+                    <option value="event">Event</option>
+                    <option value="error">Error</option>
+                </select>
+                <select class="form-select form-select-sm" name="priority" style="width: auto;">
+                    <option value="">All Priorities</option>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                </select>
+                <button type="submit" class="btn btn-outline-secondary btn-sm">Filter</button>
+            </form>
+        </div>
+    </div>
+
+    {% if messages %}
+    {{ table_macros.data_table(
+        columns=[
+            table_macros.column('entry_id', 'Entry ID', sortable=false, width='180px', format=lambda x: '<code class="small">' + x[:20] + '...</code>'),
+            table_macros.column('timestamp', 'Time', sortable=true, format=lambda x: x | format_datetime),
+            table_macros.column('message_type', 'Type', sortable=true, format=lambda x: '<span class="badge bg-' + ('primary' if x=='request' else 'success' if x=='response' else 'info' if x=='event' else 'danger') + '">' + x + '</span>'),
+            table_macros.column('priority', 'Priority', sortable=true, format=lambda x: '<span class="badge bg-' + ('secondary' if x=='low' else 'primary' if x=='normal' else 'warning text-dark' if x=='high' else 'danger') + '">' + x + '</span>'),
+            table_macros.column('source_agent', 'From', sortable=true),
+            table_macros.column('target_agent', 'To', sortable=true),
+            table_macros.column('action', 'Action', sortable=true, width='150px'),
+            table_macros.column('token_estimate', 'Tokens', sortable=true, align='text-end', format='number'),
+            table_macros.column('status', 'Status', sortable=true, format=lambda x: '<span class="badge bg-' + ('warning text-dark' if x=='pending' else 'success' if x=='acknowledged' else 'info' if x=='claimed' else 'secondary' if x=='expired' else 'danger') + '">' + x + '</span>'),
+        ],
+        rows=messages,
+        sortable=true,
+        pagination=None,
+        row_click_url="/redis-bus/partials/message-detail/" + stream.name + "/__ID__",
+        row_id_field="entry_id",
+        empty_message="No messages found",
+        actions=[
+            table_macros.action('View', '/redis-bus/partials/message-detail/' + stream.name + '/__ID__', 'view'),
+            table_macros.action('Delete', '/redis-bus/messages/action?action=delete&stream=' + stream.name + '&entry_id=__ID__', 'delete', confirm='Delete this message?', condition=lambda r: True),
+        ]
+    ) | safe }}
+    {% else %}
+    {{ macros.empty_state(icon="inbox", title="No messages", description="This stream has no messages.") | safe }}
+    {% endif %}
+</div>
+
+<script>
+// Handle row clicks for message detail
+document.addEventListener('click', function(e) {
+    const row = e.target.closest('tr.clickable-row');
+    if (row) {
+        const url = row.getAttribute('hx-get');
+        if (url) {
+            fetch(url)
+                .then(r => r.text())
+                .then(html => {
+                    document.getElementById('message-detail-body').innerHTML = html;
+                    if (window.bootstrap) {
+                        new bootstrap.Modal(document.getElementById('message-detail-modal')).show();
+                    }
+                });
+        }
+    }
+});
+</script>

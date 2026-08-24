@@ -26,13 +26,13 @@ async def health(request: Request) -> JSONResponse:
 
     if bus:
         try:
-            redis_ok = await bus.health_check()
+            redis_ok = await bus.ping()
         except Exception:
             redis_ok = False
 
         if redis_ok:
             try:
-                r = bus._redis
+                r = bus.client
                 keys = await r.keys("aegis:heartbeat:*")
                 for key in keys:
                     name = key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]

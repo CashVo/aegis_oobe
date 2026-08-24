@@ -46,7 +46,7 @@ class SessionManager:
             redis_client: An async Redis client for session persistence.
                          If None, sessions are in-memory only.
         """
-        self._redis = redis_client
+        self.client = redis_client
         self._sessions: Dict[str, Session] = {}  # In-memory cache
         logger.info("SessionManager initialized (redis=%s)", "connected" if redis_client else "none")
 
@@ -213,11 +213,11 @@ class SessionManager:
         ]
 
         # If Redis is available and we have fewer than limit, check Redis
-        if self._redis and len(matching) < limit:
+        if self.client and len(matching) < limit:
             pattern = f"{self.REDIS_PREFIX}{tenant_id}:{user_id}:*"
             try:
                 keys = []
-                async for key in self._redis.scan_iter(match=pattern, count=100):
+                async for key in self.client.scan_iter(match=pattern, count=100):
                     keys.append(key)
                     if len(keys) >= limit * 2:  # Fetch extra for filtering
                         break
@@ -287,26 +287,26 @@ class SessionManager:
 
     async def _persist_session(self, session: Session) -> None:
         """Persist session to Redis."""
-        if not self._redis:
+        if not self.client:
             return
 
         key = f"{self.REDIS_PREFIX}{session.tenant_id}:{session.user_id}:{session.session_id}"
         try:
             data = session.model_dump_json()
-            await self._redis.set(key, data, ex=self.DEFAULT_TTL)
+            await self.client.set(key, data, ex=self.DEFAULT_TTL)
         except Exception as e:
             logger.error("Failed to persist session %s: %s", session.session_id, e)
 
     async def _load_session(self, session_id: str) -> Optional[Session]:
         """Load session from Redis by scanning for matching key."""
-        if not self._redis:
+        if not self.client:
             return None
 
         try:
             # We need to scan for the session since we don't know tenant/user
             pattern = f"{self.REDIS_PREFIX}*:{session_id}"
-            async for key in self._redis.scan_iter(match=pattern, count=100):
-                data = await self._redis.get(key)
+            async for key in self.client.scan_iter(match=pattern, count=100):
+                data = await self.client.get(key)
                 if data:
                     data_str = data.decode() if isinstance(data, bytes) else data
                     return Session.model_validate_json(data_str)

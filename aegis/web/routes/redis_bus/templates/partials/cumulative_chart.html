@@ -1,0 +1,240 @@
+{# aegis/web/routes/redis_bus/templates/partials/cumulative_chart.html #}
+{% import "partials/chart_wrapper.html" as chart_macros %}
+{% import "partials/stats_card.html" as macros %}
+{% import "components/date_range_picker.html" as date_macros %}
+
+<div class="cumulative-chart">
+    <!-- Chart Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">Cumulative Tokens & Requests</h6>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" 
+                    hx-get="/redis-bus/partials/cumulative-chart"
+                    hx-target="#cumulative-chart-container"
+                    hx-include="#cumulative-filters"
+                    hx-swap="outerHTML">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                </svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <form id="cumulative-filters" class="chart-filters mb-3" hx-get="/redis-bus/partials/cumulative-chart" hx-target="#cumulative-chart-container" hx-trigger="change delay:300ms" hx-swap="outerHTML">
+        <div class="filter-item">
+            <label class="form-label small">Date Range</label>
+            {{ date_macros.date_range_picker(
+                name='date_range',
+                start_value=filters.start[:16] if filters.start else '',
+                end_value=filters.end[:16] if filters.end else '',
+                presets=true,
+                inline=true,
+                hx_get='/redis-bus/partials/cumulative-chart',
+                hx_target='#cumulative-chart-container',
+                hx_include='#cumulative-filters'
+            ) | safe }}
+        </div>
+        <div class="filter-item">
+            <label class="form-label small">Granularity</label>
+            <select class="form-select form-select-sm" name="granularity">
+                <option value="minute" {% if filters.granularity == 'minute' %}selected{% endif %}>Minute</option>
+                <option value="hour" {% if filters.granularity == 'hour' %}selected{% endif %}>Hour</option>
+                <option value="day" {% if filters.granularity == 'day' %}selected{% endif %}>Day</option>
+            </select>
+        </div>
+        <div class="filter-item" style="min-width: 200px;">
+            <label class="form-label small">Agents</label>
+            <select class="form-select form-select-sm" name="agents" multiple>
+                <option value="">All Agents</option>
+                {% for agent in data.agents %}
+                <option value="{{ agent }}" {% if filters.agents and agent in filters.agents.split(',') %}selected{% endif %}>{{ agent }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-item" style="min-width: 180px;">
+            <label class="form-label small">Message Types</label>
+            <select class="form-select form-select-sm" name="types" multiple>
+                <option value="">All Types</option>
+                {% for type in data.message_types %}
+                <option value="{{ type }}" {% if filters.types and type in filters.types.split(',') %}selected{% endif %}>{{ type | capitalize }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-item" style="min-width: 200px;">
+            <label class="form-label small">Streams</label>
+            <select class="form-select form-select-sm" name="streams" multiple>
+                <option value="">All Streams</option>
+                {% for stream in data.streams %}
+                <option value="{{ stream }}" {% if filters.streams and stream in filters.streams.split(',') %}selected{% endif %}>{{ stream }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    <!-- Summary Stats -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Total Tokens", value=data.total_tokens, icon="tokens", color="warning", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Total Requests", value=data.total_requests, icon="messages", color="primary", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Active Agents", value=data.agents | length, icon="agents", color="info", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Time Range", value=(data.date_range.end - data.date_range.start).total_seconds() if data.date_range.end and data.date_range.start else 0, icon="latency", color="success", format="duration") | safe }}
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+        <div class="card-body p-0">
+            {{ chart_macros.chart_container(
+                chart_id="cumulative-chart",
+                figure_json=chart.figure_json,
+                config=chart.config,
+                height=500,
+                title="Cumulative Tokens & Requests Over Time",
+                description="Dual-axis area chart showing cumulative token usage (left) and request count (right) with date range filtering",
+                toolbar=true
+            ) | safe }}
+        </div>
+    </div>
+
+    <!-- Breakdown Tabs -->
+    <div class="card mt-3">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="breakdownTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="by-agent-tab" data-bs-toggle="tab" data-bs-target="#by-agent-pane" type="button" role="tab">By Agent</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="by-type-tab" data-bs-toggle="tab" data-bs-target="#by-type-pane" type="button" role="tab">By Message Type</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="raw-data-tab" data-bs-toggle="tab" data-bs-target="#raw-data-pane" type="button" role="tab">Raw Data</button>
+                </li>
+            </ul>
+        </div>
+        <div class="tab-content card-body" id="breakdownTabContent">
+            <!-- By Agent -->
+            <div class="tab-pane fade show active" id="by-agent-pane" role="tabpanel">
+                {% if data.data_points %}
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="data-table mb-0">
+                        <thead class="sticky-top bg-dark">
+                            <tr>
+                                <th>Agent</th>
+                                <th class="text-end">Total Tokens</th>
+                                <th class="text-end">Total Requests</th>
+                                <th class="text-end">Avg Tokens/Req</th>
+                                <th class="text-end">% of Total Tokens</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set last_point = data.data_points[-1] %}
+                            {% for agent, agent_data in last_point.by_agent.items() %}
+                            <tr>
+                                <td><strong>{{ agent }}</strong></td>
+                                <td class="text-end">{{ agent_data.tokens | int | format_number }}</td>
+                                <td class="text-end">{{ agent_data.requests | int | format_number }}</td>
+                                <td class="text-end">{{ "%.1f" | format(agent_data.tokens / agent_data.requests if agent_data.requests > 0 else 0) }}</td>
+                                <td class="text-end">{{ "%.1f%%" | format((agent_data.tokens / data.total_tokens * 100) if data.total_tokens > 0 else 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted p-4">No data available</div>
+                {% endif %}
+            </div>
+
+            <!-- By Type -->
+            <div class="tab-pane fade" id="by-type-pane" role="tabpanel">
+                {% if data.data_points %}
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="data-table mb-0">
+                        <thead class="sticky-top bg-dark">
+                            <tr>
+                                <th>Message Type</th>
+                                <th class="text-end">Total Tokens</th>
+                                <th class="text-end">Total Requests</th>
+                                <th class="text-end">Avg Tokens/Req</th>
+                                <th class="text-end">% of Total Tokens</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set last_point = data.data_points[-1] %}
+                            {% for type, type_data in last_point.by_type.items() %}
+                            <tr>
+                                <td><span class="badge bg-{{ 'primary' if type=='request' else 'success' if type=='response' else 'info' if type=='event' else 'danger' }}">{{ type | capitalize }}</span></td>
+                                <td class="text-end">{{ type_data.tokens | int | format_number }}</td>
+                                <td class="text-end">{{ type_data.requests | int | format_number }}</td>
+                                <td class="text-end">{{ "%.1f" | format(type_data.tokens / type_data.requests if type_data.requests > 0 else 0) }}</td>
+                                <td class="text-end">{{ "%.1f%%" | format((type_data.tokens / data.total_tokens * 100) if data.total_tokens > 0 else 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted p-4">No data available</div>
+                {% endif %}
+            </div>
+
+            <!-- Raw Data -->
+            <div class="tab-pane fade" id="raw-data-pane" role="tabpanel">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="data-table mb-0">
+                        <thead class="sticky-top bg-dark">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th class="text-end">Cumulative Tokens</th>
+                                <th class="text-end">Cumulative Requests</th>
+                                <th class="text-end">Delta Tokens</th>
+                                <th class="text-end">Delta Requests</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set prev_tokens = 0 %}
+                            {% set prev_requests = 0 %}
+                            {% for point in data.data_points %}
+                            <tr>
+                                <td>{{ point.timestamp | format_datetime }}</td>
+                                <td class="text-end">{{ point.cumulative_tokens | int | format_number }}</td>
+                                <td class="text-end">{{ point.cumulative_requests | int | format_number }}</td>
+                                <td class="text-end text-{{ 'success' if point.cumulative_tokens - prev_tokens > 0 else 'muted' }}">
+                                    {{ (point.cumulative_tokens - prev_tokens) | int | format_number }}
+                                </td>
+                                <td class="text-end text-{{ 'success' if point.cumulative_requests - prev_requests > 0 else 'muted' }}">
+                                    {{ (point.cumulative_requests - prev_requests) | int | format_number }}
+                                </td>
+                            </tr>
+                            {% set prev_tokens = point.cumulative_tokens %}
+                            {% set prev_requests = point.cumulative_requests %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize select2 for multi-selects if available
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.jQuery && window.jQuery.fn.select2) {
+        window.jQuery('#cumulative-filters [name="agents"]').select2({ width: '100%', placeholder: 'All Agents' });
+        window.jQuery('#cumulative-filters [name="types"]').select2({ width: '100%', placeholder: 'All Types' });
+        window.jQuery('#cumulative-filters [name="streams"]').select2({ width: '100%', placeholder: 'All Streams' });
+    }
+});
+</script>

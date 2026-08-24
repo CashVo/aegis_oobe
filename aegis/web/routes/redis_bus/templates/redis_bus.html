@@ -1,0 +1,798 @@
+{# aegis/web/routes/redis_bus/templates/redis_bus.html #}
+{% extends "base.html" %}
+{% block title %}Redis Bus Observability · Aegis{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h1>Redis Bus Observability</h1>
+    <p class="text-muted">Real-time visibility into the Aegis message bus</p>
+</div>
+
+<!-- Overview Stats -->
+<div id="overview-stats" hx-get="/redis-bus/partials/overview-stats" hx-trigger="load, every 10s" hx-swap="innerHTML">
+    <div class="stats-grid stats-grid-4">
+        {% for i in range(4) %}
+        {{ macros.stats_card(label="Loading...", value="—", icon="messages") | safe }}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Main Content Tabs -->
+<ul class="nav nav-tabs mb-4" id="redisBusTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="streams-tab" data-bs-toggle="tab" data-bs-target="#streams-pane" type="button" role="tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+                <path d="M12 3v18"></path>
+            </svg>
+            Streams
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="pipeline-tab" data-bs-toggle="tab" data-bs-target="#pipeline-pane" type="button" role="tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <path d="M3 3h18v18H3z"></path>
+                <path d="M12 8v8"></path>
+                <path d="M8 12h8"></path>
+            </svg>
+            Pipeline
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tokens-tab" data-bs-toggle="tab" data-bs-target="#tokens-pane" type="button" role="tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+            </svg>
+            Token Charts
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="cumulative-tab" data-bs-toggle="tab" data-bs-target="#cumulative-pane" type="button" role="tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+            </svg>
+            Cumulative
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history-pane" type="button" role="tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            History
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="redisBusTabContent">
+    <!-- Streams Tab -->
+    <div class="tab-pane fade show active" id="streams-pane" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Message Streams</h3>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" hx-get="/redis-bus/partials/stream-list" hx-target="#stream-list-container" hx-swap="innerHTML">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                    </svg>
+                    Refresh
+                </button>
+                <button class="btn btn-outline-secondary" id="auto-refresh-btn" data-auto="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                        <circle cx="12" cy="12" r="10"></circle>
+                    </svg>
+                    Auto: ON
+                </button>
+            </div>
+        </div>
+
+        <!-- Stream Filters -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <form class="row g-2" hx-get="/redis-bus/partials/stream-list" hx-target="#stream-list-container" hx-trigger="change delay:300ms" hx-include="closest form">
+                    <div class="col-md-3">
+                        <label class="form-label small">Search</label>
+                        <input type="text" class="form-control form-control-sm" name="q" placeholder="Filter streams...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Agent</label>
+                        <select class="form-select form-select-sm" name="agent_id">
+                            <option value="">All Agents</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Min Messages</label>
+                        <input type="number" class="form-control form-control-sm" name="min_messages" min="0" value="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Pending</label>
+                        <select class="form-select form-select-sm" name="has_pending">
+                            <option value="">All</option>
+                            <option value="true">Has Pending</option>
+                            <option value="false">No Pending</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_broadcast" checked>
+                            <label class="form-check-label small">Include Broadcast</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Stream List -->
+        <div id="stream-list-container" hx-get="/redis-bus/partials/stream-list" hx-trigger="load">
+            <div class="text-center p-5">
+                <div class="spinner spinner-lg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pipeline Tab -->
+    <div class="tab-pane fade" id="pipeline-pane" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Pipeline Health</h3>
+            <div class="btn-group btn-group-sm">
+                <label class="btn btn-outline-secondary">
+                    <input type="radio" name="stuck_threshold" value="1" autocomplete="off"> 1 min
+                </label>
+                <label class="btn btn-outline-secondary active">
+                    <input type="radio" name="stuck_threshold" value="5" checked autocomplete="off"> 5 min
+                </label>
+                <label class="btn btn-outline-secondary">
+                    <input type="radio" name="stuck_threshold" value="15" autocomplete="off"> 15 min
+                </label>
+                <label class="btn btn-outline-secondary">
+                    <input type="radio" name="stuck_threshold" value="60" autocomplete="off"> 1 hour
+                </label>
+            </div>
+        </div>
+
+        <div id="pipeline-container" hx-get="/redis-bus/partials/pipeline" hx-trigger="load, change from:input[name=stuck_threshold]" hx-include="input[name=stuck_threshold]:checked">
+            <div class="text-center p-5">
+                <div class="spinner spinner-lg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Token Charts Tab -->
+    <div class="tab-pane fade" id="tokens-pane" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h3>Per-Message Token Usage</h3>
+            </div>
+            <div class="col-md-6 text-end">
+                <div class="btn-group btn-group-sm" role="group">
+                    <select class="form-select form-select-sm" id="token-chart-stream" style="width: auto;" hx-get="/redis-bus/partials/token-chart/__STREAM__" hx-target="#token-chart-container" hx-trigger="change">
+                        <option value="">Select a stream...</option>
+                    </select>
+                    <button class="btn btn-outline-secondary" id="token-chart-refresh">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form class="row g-2" hx-get="/redis-bus/partials/token-chart/__STREAM__" hx-target="#token-chart-container" hx-trigger="change delay:300ms" hx-include="closest form">
+                    <input type="hidden" name="stream" id="token-chart-stream-hidden">
+                    <div class="col-md-3">
+                        <label class="form-label small">Limit</label>
+                        <input type="number" class="form-control form-control-sm" name="limit" value="50" min="1" max="200">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Start</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="start">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">End</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="end">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="token-chart-container">
+            <div class="card">
+                <div class="card-body text-center text-muted py-5">
+                    Select a stream to view token usage chart
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cumulative Chart Tab -->
+    <div class="tab-pane fade" id="cumulative-pane" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <h3>Cumulative Tokens & Requests</h3>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-outline-secondary" id="cumulative-refresh">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form id="cumulative-filters" class="row g-2" hx-get="/redis-bus/partials/cumulative-chart" hx-target="#cumulative-chart-container" hx-trigger="change delay:300ms" hx-include="closest form">
+                    <div class="col-md-3">
+                        <label class="form-label small">Start</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="start" id="cum-start">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">End</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="end" id="cum-end">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Granularity</label>
+                        <select class="form-select form-select-sm" name="granularity">
+                            <option value="minute">Minute</option>
+                            <option value="hour" selected>Hour</option>
+                            <option value="day">Day</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Agents</label>
+                        <select class="form-select form-select-sm" name="agents" multiple>
+                            <option value="">All Agents</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Types</label>
+                        <select class="form-select form-select-sm" name="types" multiple>
+                            <option value="">All Types</option>
+                            <option value="request">Request</option>
+                            <option value="response">Response</option>
+                            <option value="event">Event</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="cumulative-chart-container" hx-get="/redis-bus/partials/cumulative-chart" hx-trigger="load">
+            <div class="text-center p-5">
+                <div class="spinner spinner-lg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Tab -->
+    <div class="tab-pane fade" id="history-pane" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <h3>Historical Data & Archives</h3>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-outline-secondary" id="archiver-start" hx-post="/redis-bus/archiver/start" hx-target="#archiver-status" hx-swap="innerHTML">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        Start Archiver
+                    </button>
+                    <button class="btn btn-outline-secondary" id="archiver-stop" hx-post="/redis-bus/archiver/stop" hx-target="#archiver-status" hx-swap="innerHTML">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                            <rect x="6" y="4" width="4" height="16"></rect>
+                            <rect x="14" y="4" width="4" height="16"></rect>
+                        </svg>
+                        Stop Archiver
+                    </button>
+                    <button class="btn btn-outline-secondary" id="archiver-refresh" hx-get="/redis-bus/archiver/status" hx-target="#archiver-status" hx-swap="innerHTML">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="1 4 1 10 7 10"></polyline>
+                            <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="archiver-status" class="mb-3" hx-get="/redis-bus/archiver/status" hx-trigger="load">
+            <div class="text-center p-3">
+                <div class="spinner spinner-sm"></div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-3" id="historyTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="history-messages-tab" data-bs-toggle="tab" data-bs-target="#history-messages-pane" type="button" role="tab">Messages</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-streams-tab" data-bs-toggle="tab" data-bs-target="#history-streams-pane" type="button" role="tab">Stream Metrics</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-pipeline-tab" data-bs-toggle="tab" data-bs-target="#history-pipeline-pane" type="button" role="tab">Pipeline History</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-tokens-tab" data-bs-toggle="tab" data-bs-target="#history-tokens-pane" type="button" role="tab">Token Aggregates</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-actions-tab" data-bs-toggle="tab" data-bs-target="#history-actions-pane" type="button" role="tab">Action Log</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="historyTabContent">
+            <!-- Messages History -->
+            <div class="tab-pane fade show active" id="history-messages-pane" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <form class="row g-2" hx-get="/redis-bus/history/messages" hx-target="#history-messages-results" hx-trigger="change delay:300ms, submit" hx-include="closest form">
+                            <div class="col-md-2">
+                                <label class="form-label small">Stream</label>
+                                <select class="form-select form-select-sm" name="stream_name">
+                                    <option value="">All Streams</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Type</label>
+                                <select class="form-select form-select-sm" name="message_type">
+                                    <option value="">All Types</option>
+                                    <option value="request">Request</option>
+                                    <option value="response">Response</option>
+                                    <option value="event">Event</option>
+                                    <option value="error">Error</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Source Agent</label>
+                                <select class="form-select form-select-sm" name="source_agent">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Status</label>
+                                <select class="form-select form-select-sm" name="status">
+                                    <option value="">All</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="acknowledged">Acknowledged</option>
+                                    <option value="claimed">Claimed</option>
+                                    <option value="expired">Expired</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Start</label>
+                                <input type="datetime-local" class="form-control form-control-sm" name="start" id="hist-msg-start">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">End</label>
+                                <input type="datetime-local" class="form-control form-control-sm" name="end" id="hist-msg-end">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="history-messages-results" hx-get="/redis-bus/history/messages" hx-trigger="load">
+                    <div class="text-center p-5">
+                        <div class="spinner spinner-lg"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stream Metrics History -->
+            <div class="tab-pane fade" id="history-streams-pane" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <form class="row g-2" hx-get="/redis-bus/history/streams/__STREAM__" hx-target="#history-streams-results" hx-trigger="change delay:300ms" hx-include="closest form">
+                            <div class="col-md-3">
+                                <label class="form-label small">Stream</label>
+                                <select class="form-select form-select-sm" name="stream_name" id="hist-stream-select" hx-get="/redis-bus/history/streams/__STREAM__" hx-target="#history-streams-results" hx-trigger="change">
+                                    <option value="">Select a stream...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Hours</label>
+                                <input type="number" class="form-control form-control-sm" name="hours" value="24" min="1" max="168">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Limit</label>
+                                <input type="number" class="form-control form-control-sm" name="limit" value="100" min="1" max="5000">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="history-streams-results">
+                    <div class="card">
+                        <div class="card-body text-center text-muted py-5">
+                            Select a stream to view historical metrics
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline History -->
+            <div class="tab-pane fade" id="history-pipeline-pane" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <form class="row g-2" hx-get="/redis-bus/history/pipeline" hx-target="#history-pipeline-results" hx-trigger="change delay:300ms">
+                            <div class="col-md-3">
+                                <label class="form-label small">Hours</label>
+                                <input type="number" class="form-control form-control-sm" name="hours" value="24" min="1" max="168">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="history-pipeline-results" hx-get="/redis-bus/history/pipeline" hx-trigger="load">
+                    <div class="text-center p-5">
+                        <div class="spinner spinner-lg"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Aggregates History -->
+            <div class="tab-pane fade" id="history-tokens-pane" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <form class="row g-2" hx-get="/redis-bus/history/tokens" hx-target="#history-tokens-results" hx-trigger="change delay:300ms" hx-include="closest form">
+                            <div class="col-md-2">
+                                <label class="form-label small">Stream</label>
+                                <select class="form-select form-select-sm" name="stream_name">
+                                    <option value="">All Streams</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Granularity</label>
+                                <select class="form-select form-select-sm" name="granularity">
+                                    <option value="minute">Minute</option>
+                                    <option value="hour" selected>Hour</option>
+                                    <option value="day">Day</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Start</label>
+                                <input type="datetime-local" class="form-control form-control-sm" name="start" id="hist-tok-start">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">End</label>
+                                <input type="datetime-local" class="form-control form-control-sm" name="end" id="hist-tok-end">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Limit</label>
+                                <input type="number" class="form-control form-control-sm" name="limit" value="100" min="1" max="5000">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="history-tokens-results" hx-get="/redis-bus/history/tokens" hx-trigger="load">
+                    <div class="text-center p-5">
+                        <div class="spinner spinner-lg"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Log History -->
+            <div class="tab-pane fade" id="history-actions-pane" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <form class="row g-2" hx-get="/redis-bus/history/actions" hx-target="#history-actions-results" hx-trigger="change delay:300ms" hx-include="closest form">
+                            <div class="col-md-3">
+                                <label class="form-label small">Stream</label>
+                                <select class="form-select form-select-sm" name="stream_name">
+                                    <option value="">All Streams</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Message ID</label>
+                                <input type="text" class="form-control form-control-sm" name="message_id" placeholder="Filter by message ID...">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Hours</label>
+                                <input type="number" class="form-control form-control-sm" name="hours" value="24" min="1" max="168">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Limit</label>
+                                <input type="number" class="form-control form-control-sm" name="limit" value="100" min="1" max="1000">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="history-actions-results" hx-get="/redis-bus/history/actions" hx-trigger="load">
+                    <div class="text-center p-5">
+                        <div class="spinner spinner-lg"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Maintenance -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">Maintenance</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small">Retention Days</label>
+                        <input type="number" class="form-control form-control-sm" name="retention_days" id="cleanup-retention" value="30" min="1" max="365">
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-danger w-100" hx-post="/redis-bus/maintenance/cleanup" hx-target="#cleanup-result" hx-include="#cleanup-retention" hx-confirm="This will delete data older than the specified retention period. Continue?">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Cleanup Old Data
+                        </button>
+                    </div>
+                    <div class="col-md-6" id="cleanup-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Message Detail Modal -->
+<div class="modal fade" id="message-detail-modal" tabindex="-1" aria-labelledby="message-detail-label" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="message-detail-label">Message Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="message-detail-body">
+                <!-- Loaded via HTMX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stream Detail Modal -->
+<div class="modal fade" id="stream-detail-modal" tabindex="-1" aria-labelledby="stream-detail-label" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="stream-detail-label">Stream Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="stream-detail-body">
+                <!-- Loaded via HTMX -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize date defaults for cumulative chart
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+    const startInput = document.getElementById('cum-start');
+    const endInput = document.getElementById('cum-end');
+
+    if (startInput && !startInput.value) {
+        startInput.value = dayAgo.toISOString().slice(0, 16);
+    }
+    if (endInput && !endInput.value) {
+        endInput.value = now.toISOString().slice(0, 16);
+    }
+
+    // Auto-refresh toggle
+    const autoBtn = document.getElementById('auto-refresh-btn');
+    let autoRefreshInterval = null;
+
+    function updateAutoBtn() {
+        const isOn = autoBtn.dataset.auto === 'true';
+        autoBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+            Auto: ${isOn ? 'ON' : 'OFF'}
+        `;
+        autoBtn.classList.toggle('btn-primary', isOn);
+        autoBtn.classList.toggle('btn-outline-secondary', !isOn);
+    }
+
+    autoBtn.addEventListener('click', function() {
+        const isOn = this.dataset.auto === 'true';
+        this.dataset.auto = isOn ? 'false' : 'true';
+        updateAutoBtn();
+
+        if (isOn) {
+            clearInterval(autoRefreshInterval);
+        } else {
+            autoRefreshInterval = setInterval(() => {
+                document.getElementById('stream-list-container')?.dispatchEvent(new Event('htmx:trigger'));
+                document.getElementById('pipeline-container')?.dispatchEvent(new Event('htmx:trigger'));
+            }, 10000);
+        }
+    });
+
+    // Start auto-refresh
+    autoRefreshInterval = setInterval(() => {
+        document.getElementById('stream-list-container')?.dispatchEvent(new Event('htmx:trigger'));
+        document.getElementById('pipeline-container')?.dispatchEvent(new Event('htmx:trigger'));
+    }, 10000);
+
+    updateAutoBtn();
+
+    // Populate stream selector for token chart
+    async function populateStreamSelector() {
+        try {
+            const response = await fetch('/redis-bus/streams');
+            const streams = await response.json();
+            const select = document.getElementById('token-chart-stream');
+            const hiddenInput = document.getElementById('token-chart-stream-hidden');
+
+            streams.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = `${s.name} (${s.length} msgs, ${s.pending_count} pending)`;
+                select.appendChild(opt);
+            });
+
+            // Update hidden input when selection changes
+            select.addEventListener('change', function() {
+                hiddenInput.value = this.value;
+                // Update the HTMX URL
+                const form = document.querySelector('#token-chart-container form') || select.closest('form');
+                if (form) {
+                    form.querySelector('[name="stream"]').value = this.value;
+                }
+            });
+        } catch (e) {
+            console.error('Failed to load streams:', e);
+        }
+    }
+
+    populateStreamSelector();
+
+    // Populate agent filter for cumulative chart
+    async function populateAgentFilter() {
+        try {
+            const response = await fetch('/redis-bus/streams');
+            const streams = await response.json();
+            const agents = [...new Set(streams.map(s => s.agent_id))];
+            const select = document.querySelector('[name="agents"]');
+            agents.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a;
+                opt.textContent = a;
+                select.appendChild(opt);
+            });
+            // Initialize select2 if available
+            if (window.jQuery && window.jQuery.fn.select2) {
+                window.jQuery(select).select2({ width: '100%', placeholder: 'All Agents' });
+            }
+        } catch (e) {
+            console.error('Failed to load agents:', e);
+        }
+    }
+
+    populateAgentFilter();
+
+    // Handle chart click events for drill-down
+    window.addEventListener('chart:click', function(e) {
+        const { chartId, point } = e.detail;
+        if (point.customdata && point.customdata.entry_id) {
+            // Open message detail modal
+            const stream = point.customdata.stream || document.getElementById('token-chart-stream-hidden')?.value;
+            if (stream) {
+                fetch(`/redis-bus/partials/message-detail/${stream}/${point.customdata.entry_id}`)
+                    .then(r => r.text())
+                    .then(html => {
+                        document.getElementById('message-detail-body').innerHTML = html;
+                        if (window.bootstrap) {
+                            new bootstrap.Modal(document.getElementById('message-detail-modal')).show();
+                        }
+                    });
+            }
+        }
+    });
+
+    // Populate history tab selectors
+    async function populateHistorySelectors() {
+        try {
+            const response = await fetch('/redis-bus/streams');
+            const streams = await response.json();
+            const agents = [...new Set(streams.map(s => s.agent_id))];
+
+            // Populate stream selectors
+            const streamSelectors = [
+                'select[name="stream_name"]',
+                '#hist-stream-select'
+            ];
+
+            streamSelectors.forEach(selector => {
+                document.querySelectorAll(selector).forEach(select => {
+                    // Keep the first option (All Streams / Select a stream...)
+                    const firstOption = select.querySelector('option');
+                    select.innerHTML = '';
+                    if (firstOption) select.appendChild(firstOption);
+
+                    streams.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.name;
+                        opt.textContent = `${s.name} (${s.length} msgs, ${s.pending_count} pending)`;
+                        select.appendChild(opt);
+                    });
+                });
+            });
+
+            // Populate agent selectors
+            document.querySelectorAll('select[name="source_agent"]').forEach(select => {
+                const firstOption = select.querySelector('option');
+                select.innerHTML = '';
+                if (firstOption) select.appendChild(firstOption);
+
+                agents.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a;
+                    opt.textContent = a;
+                    select.appendChild(opt);
+                });
+            });
+
+            // Initialize date defaults for history tabs
+            const now = new Date();
+            const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+            const historyStartInputs = ['hist-msg-start', 'hist-tok-start'];
+            const historyEndInputs = ['hist-msg-end', 'hist-tok-end'];
+
+            historyStartInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.value) {
+                    el.value = dayAgo.toISOString().slice(0, 16);
+                }
+            });
+
+            historyEndInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.value) {
+                    el.value = now.toISOString().slice(0, 16);
+                }
+            });
+        } catch (e) {
+            console.error('Failed to populate history selectors:', e);
+        }
+    }
+
+    populateHistorySelectors();
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+        if (e.key === '/') {
+            e.preventDefault();
+            document.querySelector('[name="q"]')?.focus();
+        }
+    });
+});
+</script>
+{% endblock %}

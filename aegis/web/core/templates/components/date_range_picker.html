@@ -1,0 +1,133 @@
+{# aegis/web/core/templates/components/date_range_picker.html #}
+{# Reusable date range picker component #}
+
+{% macro date_range_picker(
+    name="date_range",
+    start_name=null,
+    end_name=null,
+    start_value=null,
+    end_value=null,
+    presets=true,
+    inline=false,
+    class="",
+    hx_get=null,
+    hx_target=null,
+    hx_trigger="change delay:300ms",
+    hx_include=null
+) %}
+{% set start_name = start_name or name ~ '_start' %}
+{% set end_name = end_name or name ~ '_end' %}
+
+<div class="date-range-picker {{ class }}" {% if hx_get %}hx-get="{{ hx_get }}" hx-target="{{ hx_target or '#chart-container' }}" hx-trigger="{{ hx_trigger }}" hx-include="{{ hx_include or 'closest form' }}"{% endif %}>
+    {% if presets and not inline %}
+    <div class="date-presets btn-group btn-group-sm mb-2" role="group">
+        <button type="button" class="btn btn-outline-secondary" data-preset="1h" {% if not start_value and not end_value %}aria-pressed="true"{% endif %}>1H</button>
+        <button type="button" class="btn btn-outline-secondary" data-preset="6h">6H</button>
+        <button type="button" class="btn btn-outline-secondary" data-preset="24h">24H</button>
+        <button type="button" class="btn btn-outline-secondary" data-preset="7d">7D</button>
+        <button type="button" class="btn btn-outline-secondary" data-preset="30d">30D</button>
+        <button type="button" class="btn btn-outline-secondary" data-preset="custom">Custom</button>
+    </div>
+    {% endif %}
+
+    <div class="date-inputs {% if presets and not inline %}d-flex gap-2{% else %}d-flex flex-column gap-2{% endif %}">
+        <div class="input-group input-group-sm flex-grow-1">
+            <span class="input-group-text">From</span>
+            <input
+                type="datetime-local"
+                class="form-control"
+                name="{{ start_name }}"
+                id="{{ start_name }}"
+                value="{{ start_value or '' }}"
+                {% if hx_get %}{% else %}onchange="this.form.requestSubmit()"{% endif %}
+            >
+        </div>
+        <div class="input-group input-group-sm flex-grow-1">
+            <span class="input-group-text">To</span>
+            <input
+                type="datetime-local"
+                class="form-control"
+                name="{{ end_name }}"
+                id="{{ end_name }}"
+                value="{{ end_value or '' }}"
+                {% if hx_get %}{% else %}onchange="this.form.requestSubmit()"{% endif %}
+            >
+        </div>
+    </div>
+
+    {% if inline %}
+    <div class="date-presets-inline mt-2">
+        <small class="text-muted">Quick select: </small>
+        <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-preset="1h">Last hour</button>
+        <span class="text-muted mx-1">|</span>
+        <button type="button" class="btn btn-sm btn-link p-0" data-preset="24h">Last 24h</button>
+        <span class="text-muted mx-1">|</span>
+        <button type="button" class="btn btn-sm btn-link p-0" data-preset="7d">Last 7 days</button>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const picker = document.currentScript?.closest('.date-range-picker');
+    if (!picker) return;
+
+    const startInput = picker.querySelector('[name$="_start"]');
+    const endInput = picker.querySelector('[name$="_end"]');
+    const presetButtons = picker.querySelectorAll('[data-preset]');
+
+    function setRange(preset) {
+        const now = new Date();
+        let start, end = now;
+
+        switch (preset) {
+            case '1h': start = new Date(now - 3600000); break;
+            case '6h': start = new Date(now - 6 * 3600000); break;
+            case '24h': start = new Date(now - 24 * 3600000); break;
+            case '7d': start = new Date(now - 7 * 86400000); break;
+            case '30d': start = new Date(now - 30 * 86400000); break;
+            case 'custom': return; // Keep current values
+            default: return;
+        }
+
+        startInput.value = formatDateTimeLocal(start);
+        endInput.value = formatDateTimeLocal(end);
+
+        // Update active button
+        presetButtons.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.preset === preset);
+            btn.setAttribute('aria-pressed', btn.dataset.preset === preset);
+        });
+
+        // Trigger HTMX if configured
+        if (picker.hasAttribute('hx-get')) {
+            const event = new Event('change', { bubbles: true });
+            startInput.dispatchEvent(event);
+        }
+    }
+
+    function formatDateTimeLocal(date) {
+        const offset = date.getTimezoneOffset() * 60000;
+        const local = new Date(date.getTime() - offset);
+        return local.toISOString().slice(0, 16);
+    }
+
+    presetButtons.forEach(btn => {
+        btn.addEventListener('click', () => setRange(btn.dataset.preset));
+    });
+
+    // Set initial active state
+    if (startValue && endValue) {
+        // Custom range - no preset active
+    } else if (!startValue && !endValue) {
+        // Default to 24h
+        presetButtons.forEach(btn => {
+            if (btn.dataset.preset === '24h') {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            }
+        });
+    }
+})();
+</script>
+{% endmacro %}

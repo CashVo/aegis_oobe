@@ -1,0 +1,238 @@
+{# aegis/web/routes/redis_bus/templates/partials/pipeline_view.html #}
+{% import "partials/stats_card.html" as macros %}
+{% import "partials/chart_wrapper.html" as chart_macros %}
+
+<div class="pipeline-view">
+    <!-- Pipeline Overview Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2 col-6">
+            {{ macros.stats_card(
+                label="In Pipeline",
+                value=pipeline.in_pipeline,
+                icon="messages",
+                color="primary",
+                subtitle="Pending messages"
+            ) | safe }}
+        </div>
+        <div class="col-md-2 col-6">
+            {{ macros.stats_card(
+                label="Done (1h)",
+                value=pipeline.done_last_hour,
+                icon="throughput",
+                color="success",
+                subtitle="Acknowledged last hour"
+            ) | safe }}
+        </div>
+        <div class="col-md-2 col-6">
+            {{ macros.stats_card(
+                label="Stuck",
+                value=pipeline.stuck,
+                icon="pending",
+                color="warning",
+                subtitle="Pending > threshold with retries"
+            ) | safe }}
+        </div>
+        <div class="col-md-2 col-6">
+            {{ macros.stats_card(
+                label="Abandoned",
+                value=pipeline.abandoned,
+                icon="error",
+                color="danger",
+                subtitle="Expired or max retries"
+            ) | safe }}
+        </div>
+        <div class="col-md-2 col-6">
+            {{ macros.stats_card(
+                label="Dead Letter",
+                value=pipeline.dead_letter,
+                icon="error",
+                color="danger",
+                subtitle="In dead letter queue"
+            ) | safe }}
+        </div>
+        <div class="col-md-2 col-6">
+            {{ macros.stats_card(
+                label="Total Agents",
+                value=pipeline.by_agent | length,
+                icon="agents",
+                color="info",
+                subtitle="Active agents"
+            ) | safe }}
+        </div>
+    </div>
+
+    <!-- Funnel Chart -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Message Flow Funnel</h6>
+        </div>
+        <div class="card-body">
+            <div id="pipeline-funnel-chart" class="chart-container" style="height: 350px;"></div>
+        </div>
+    </div>
+
+    <!-- By Agent Breakdown -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Pipeline by Agent</h6>
+        </div>
+        <div class="card-body p-0">
+            {% if pipeline.by_agent %}
+            <div class="table-responsive">
+                <table class="data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Agent</th>
+                            <th class="text-center">In Pipeline</th>
+                            <th class="text-center">Done (1h)</th>
+                            <th class="text-center">Stuck</th>
+                            <th class="text-center">Abandoned</th>
+                            <th class="text-center">Avg Latency</th>
+                            <th class="text-center">Error Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for agent_id, agent_data in pipeline.by_agent.items() %}
+                        <tr>
+                            <td><strong>{{ agent_id }}</strong></td>
+                            <td class="text-center">
+                                <span class="badge bg-primary">{{ agent_data.in_pipeline }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-success">{{ agent_data.done_last_hour }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if agent_data.stuck > 0 %}
+                                <span class="badge bg-warning text-dark">{{ agent_data.stuck }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if agent_data.abandoned > 0 %}
+                                <span class="badge bg-danger">{{ agent_data.abandoned }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ "%.1f" | format(agent_data.avg_latency_ms) }} ms</td>
+                            <td class="text-center">{{ "%.1f%%" | format(agent_data.error_rate * 100) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-4 text-center text-muted">No agent data available</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- By Stream Breakdown -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0">Pipeline by Stream</h6>
+        </div>
+        <div class="card-body p-0">
+            {% if pipeline.by_stream %}
+            <div class="table-responsive">
+                <table class="data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Stream</th>
+                            <th>Agent</th>
+                            <th class="text-center">In Pipeline</th>
+                            <th class="text-center">Done (1h)</th>
+                            <th class="text-center">Stuck</th>
+                            <th class="text-center">Abandoned</th>
+                            <th class="text-center">Oldest Pending</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stream_name, stream_data in pipeline.by_stream.items() %}
+                        <tr>
+                            <td><code>{{ stream_name }}</code></td>
+                            <td>{{ stream_data.agent_id }}</td>
+                            <td class="text-center">
+                                <span class="badge bg-primary">{{ stream_data.in_pipeline }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-success">{{ stream_data.done_last_hour }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if stream_data.stuck > 0 %}
+                                <span class="badge bg-warning text-dark">{{ stream_data.stuck }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if stream_data.abandoned > 0 %}
+                                <span class="badge bg-danger">{{ stream_data.abandoned }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if stream_data.oldest_pending_age_sec > 0 %}
+                                {{ stream_data.oldest_pending_age_sec | format_duration }}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-4 text-center text-muted">No stream data available</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Render funnel chart
+document.addEventListener('DOMContentLoaded', function() {
+    const funnelData = {
+        labels: ['In Pipeline', 'Processing', 'Completed', 'Stuck', 'Abandoned'],
+        values: [
+            {{ pipeline.in_pipeline }},
+            {{ pipeline.done_last_hour }},
+            {{ pipeline.done_last_hour }},
+            {{ pipeline.stuck }},
+            {{ pipeline.abandoned }}
+        ]
+    };
+
+    if (window.Plotly) {
+        const trace = {
+            type: 'funnel',
+            y: funnelData.labels,
+            x: funnelData.values,
+            textinfo: 'value+percent initial',
+            textposition: 'inside',
+            marker: {
+                color: ['#00D4AA', '#4ECDC4', '#6BCB77', '#FFD93D', '#FF6B6B']
+            },
+            connector: {
+                line: { color: 'rgba(255,255,255,0.1)', dash: 'dot', width: 2 }
+            },
+            hovertemplate: '<b>%{y}</b><br>Count: %{x:,.0f}<br>%{percentInitial:.1%} of initial<extra></extra>',
+        };
+
+        const layout = {
+            margin: { l: 100, r: 20, t: 20, b: 20 },
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#e0e0e0' },
+        };
+
+        Plotly.newPlot('pipeline-funnel-chart', [trace], layout, {
+            displayModeBar: false,
+            responsive: true,
+        });
+    }
+});
+</script>

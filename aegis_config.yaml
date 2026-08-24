@@ -1,5 +1,6 @@
 # File: aegis_config.yaml
 # Purpose: Default config template. Values here are the lowest precedence.
+#          Precedence: ENV (AEGIS_*) > YAML > Pydantic Defaults
 
 project_name: "aegis"
 version: "0.1.0"
@@ -22,9 +23,8 @@ api:
 # Default timeout for agent request-response cycles.
 agent_timeout_s: 30
 
-# config/oracle_config_fragment.yaml
 # ──────────────────────────────────────────────────────────────────────
-# Implements: Part II §2.1 — Oracle configuration
+# Oracle Configuration (CHUNK-004 / CHUNK-013)
 # ──────────────────────────────────────────────────────────────────────
 
 oracle:
@@ -44,14 +44,24 @@ oracle:
       max_concurrent: 4
       max_retries: 3
 
-    openai:
-      provider_type: "openai_compat"
-      base_url: "https://api.openai.com/v1"
-      api_key_env: "OPENAI_API_KEY"
-      enabled: false
+    openrouter:
+      provider_type: "openrouter"
+      base_url: "https://openrouter.ai/api/v1"
+      api_key_env: "OPENROUTER_API_KEY"
+      enabled: true
       timeout_seconds: 60
-      max_concurrent: 4
+      max_concurrent: 8
       max_retries: 3
+      default_model: "nvidia/nemotron-3-ultra:free"
+
+    # openai: (disabled by default, enable and set OPENAI_API_KEY to use)
+    #   provider_type: "openai_compat"
+    #   base_url: "https://api.openai.com/v1"
+    #   api_key_env: "OPENAI_API_KEY"
+    #   enabled: false
+    #   timeout_seconds: 60
+    #   max_concurrent: 4
+    #   max_retries: 3
 
   # ── Model Registry ──
   models:
@@ -84,6 +94,67 @@ oracle:
       supports_json_mode: false
       supports_embeddings: true
       max_output_tokens: 0
+
+    # OpenRouter free tier models (via OpenRouterProvider with tiered fallback)
+    nemotron-3-ultra:
+      llm_id: "nvidia/nemotron-3-ultra:free"
+      provider: "openrouter"
+      display_name: "Nemotron 3 Ultra (OpenRouter Free)"
+      context_window: 128000
+      preference_tags: ["cloud", "capable", "complex", "default"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    nemotron-3.5-lightning:
+      llm_id: "nvidia/nemotron-3.5-lightning:free"
+      provider: "openrouter"
+      display_name: "Nemotron 3.5 Lightning (OpenRouter Free)"
+      context_window: 128000
+      preference_tags: ["cloud", "fast"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    gemma-4-26b:
+      llm_id: "google/gemma-4-26b-a4b:free"
+      provider: "openrouter"
+      display_name: "Gemma 4 26B A4B (OpenRouter Free)"
+      context_window: 8192
+      preference_tags: ["cloud", "capable", "complex"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    gemma-4-31b:
+      llm_id: "google/gemma-4-31b:free"
+      provider: "openrouter"
+      display_name: "Gemma 4 31B (OpenRouter Free)"
+      context_window: 8192
+      preference_tags: ["cloud", "capable", "complex"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    glm-5.2:
+      llm_id: "zai/glm-5.2:free"
+      provider: "openrouter"
+      display_name: "GLM 5.2 (OpenRouter Free)"
+      context_window: 32768
+      preference_tags: ["cloud", "multilingual"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
+    gpt-oss-20b:
+      llm_id: "gpt-oss-20b:free"
+      provider: "openrouter"
+      display_name: "GPT-OSS 20B (OpenRouter Free)"
+      context_window: 32768
+      preference_tags: ["cloud", "fallback"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
 
   # ── Response Cache ──
   cache:
@@ -148,3 +219,41 @@ cli:
   default_tenant: "default"
   default_user: "root"
   default_config: "aegis_config.yaml"
+
+# Janus (API Gateway) configuration
+janus:
+  host: "127.0.0.1"
+  port: 8000
+  workers: 1
+  cors_origins:
+    - "http://localhost:8420"
+    - "http://127.0.0.1:8420"
+
+# Warden (Authorization) configuration
+warden:
+  enabled: true
+  policy_path: "aegis_data/warden_policies.yaml"
+  default_decision: "deny"
+
+# Identity configuration
+identity:
+  enabled: true
+  db_path: "aegis_data/identity.db"
+  # Passphrase hashing rounds (higher = more secure, slower)
+  argon2_iterations: 3
+  argon2_memory_mb: 64
+  argon2_parallelism: 4
+
+# Observer configuration
+observer:
+  enabled: true
+  db_path: "aegis_data/observer.db"
+  retention_days: 30
+  batch_size: 100
+  flush_interval_seconds: 5
+
+# Forge configuration
+forge:
+  enabled: true
+  workspace_dir: "aegis_data/forge"
+  max_concurrent_tasks: 4

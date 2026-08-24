@@ -1,0 +1,252 @@
+{# aegis/web/routes/redis_bus/templates/partials/message_detail.html #}
+{% import "partials/stats_card.html" as macros %}
+
+<div class="message-detail">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h6 class="mb-1">
+                <span class="badge bg-{{ 'primary' if message.message_type=='request' else 'success' if message.message_type=='response' else 'info' if message.message_type=='event' else 'danger' }} me-2">
+                    {{ message.message_type | upper }}
+                </span>
+                <span class="badge bg-{{ 'secondary' if message.priority=='low' else 'primary' if message.priority=='normal' else 'warning text-dark' if message.priority=='high' else 'danger' }} me-2">
+                    {{ message.priority | upper }}
+                </span>
+                <span class="badge bg-{{ 'warning text-dark' if message.status=='pending' else 'success' if message.status=='acknowledged' else 'info' if message.status=='claimed' else 'secondary' if message.status=='expired' else 'danger' }}">
+                    {{ message.status | upper }}
+                </span>
+            </h6>
+            <small class="text-muted">
+                Entry ID: <code>{{ message.entry_id }}</code> | 
+                Message ID: <code>{{ message.message_id[:16] }}...</code>
+            </small>
+        </div>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ message.message_id }}')" title="Copy Message ID">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+            <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ message.entry_id }}')" title="Copy Entry ID">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+            {% if message.status == 'pending' %}
+            <div class="btn-group" role="group">
+                <button class="btn btn-outline-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">Actions</button>
+                <ul class="dropdown-menu">
+                    <li>
+                        <button class="dropdown-item text-danger" 
+                                hx-post="/redis-bus/messages/action?action=delete&stream={{ message.stream }}&entry_id={{ message.entry_id }}"
+                                hx-target="#message-detail-body"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete this message permanently?">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" 
+                                hx-post="/redis-bus/messages/action?action=retry&stream={{ message.stream }}&entry_id={{ message.entry_id }}"
+                                hx-target="#message-detail-body"
+                                hx-swap="innerHTML">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="1 4 1 10 7 10"></polyline>
+                                <path d="M23 20v-6a2 2 0 0 1 2-2h-6"></path>
+                            </svg>
+                            Retry
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" 
+                                hx-post="/redis-bus/messages/action?action=acknowledge&stream={{ message.stream }}&entry_id={{ message.entry_id }}"
+                                hx-target="#message-detail-body"
+                                hx-swap="innerHTML">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Acknowledge
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Key Info Grid -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Source Agent", value=message.source_agent, icon="agents", color="info", format="text") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Target Agent", value=message.target_agent, icon="agents", color="primary", format="text") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Action", value=message.action, icon="move", color="success", format="text") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Correlation ID", value=message.correlation_id or '—', icon="move", color="secondary", format="text") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Timestamp", value=message.timestamp | format_datetime, icon="latency", color="primary", format="text") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Age", value=message.age_seconds, icon="latency", color="warning", format="duration") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Size", value=message.size_bytes, icon="tokens", color="info", format="bytes") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Est. Tokens", value=message.token_estimate, icon="tokens", color="success", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Delivery Count", value=message.delivery_count, icon="refresh", color="warning", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Retry Count", value=message.retry_count, icon="refresh", color="danger", format="number") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Processing Latency", value=message.processing_latency_ms or 0, icon="latency", color="primary", format="duration") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="TTL", value=message.ttl_seconds or 0, icon="pending", color="secondary", format="duration") | safe }}
+        </div>
+    </div>
+
+    <!-- Token Usage Detail -->
+    {% if message.token_usage %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Token Usage</h6>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <div class="stats-value text-primary">{{ message.token_usage.prompt_tokens | int | format_number }}</div>
+                    <div class="stats-label">Prompt Tokens</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stats-value text-success">{{ message.token_usage.completion_tokens | int | format_number }}</div>
+                    <div class="stats-label">Completion Tokens</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stats-value text-warning">{{ message.token_usage.total_tokens | int | format_number }}</div>
+                    <div class="stats-label">Total Tokens</div>
+                </div>
+            </div>
+            {% if message.token_usage.model %}
+            <div class="mt-2 text-muted small">
+                Model: {{ message.token_usage.model }} {% if message.token_usage.estimated %}(estimated){% endif %}
+            </div>
+            {% endif %}
+            {% if message.token_usage.estimated_cost_usd %}
+            <div class="text-muted small">Est. Cost: ${{ "%.6f" | format(message.token_usage.estimated_cost_usd) }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Consumer Group Info -->
+    {% if message.consumer_group %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Consumer Group</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Group:</strong> <code>{{ message.consumer_group }}</code>
+                </div>
+                <div class="col-md-6">
+                    <strong>Consumer:</strong> <code>{{ message.consumer }}</code>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Payload -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Payload</h6>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="copyToClipboard(JSON.stringify({{ message.payload | tojson }}, null, 2))">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Copy JSON
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <pre class="mb-0 p-3"><code class="language-json">{{ message.payload | tojson(indent=2) }}</code></pre>
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    {% if message.metadata %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Metadata</h6>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="copyToClipboard(JSON.stringify({{ message.metadata | tojson }}, null, 2))">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Copy JSON
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <pre class="mb-0 p-3"><code class="language-json">{{ message.metadata | tojson(indent=2) }}</code></pre>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tenant/User Context -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0">Context</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Tenant:</strong> <code>{{ message.tenant_id }}</code>
+                </div>
+                <div class="col-md-6">
+                    <strong>User:</strong> <code>{{ message.user_id }}</code>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Syntax highlighting for JSON
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('pre code').forEach(block => {
+        if (window.hljs) {
+            hljs.highlightElement(block);
+        }
+    });
+});
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        if (window.MC && MC.util) {
+            MC.util.toast('Copied to clipboard', 'success');
+        }
+    });
+}
+</script>

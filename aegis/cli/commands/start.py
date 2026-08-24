@@ -48,8 +48,13 @@ def start(
             if web:
                 typer.echo(f"[✓] Mission Control → http://localhost:{web_port}")
                 # Launch web server alongside agent loop
-                from aegis.web.app import create_app
-                import uvicorn
+                try:
+                    from aegis.web.app import create_app
+                    import uvicorn
+                except ImportError as e:
+                    typer.echo(f"[✗] Web UI dependencies not installed: {e}")
+                    typer.echo("    Run 'aegis install' or 'pip install -e \".[web]\"' to install web dependencies.")
+                    raise typer.Exit(code=1)
 
                 web_app = create_app(cfg)
                 web_config = uvicorn.Config(

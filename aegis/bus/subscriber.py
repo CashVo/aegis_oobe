@@ -35,6 +35,7 @@ from aegis.bus.constants import (
     DEFAULT_READ_COUNT,
     DEFAULT_CLAIM_MIN_IDLE_MS,
     DEFAULT_MAX_RETRIES,
+    CONSUMER_GROUP_PREFIX,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ class MessageSubscriber:
         self,
         redis_client: Redis,
         agent_id: str,
-        handler: MessageHandler,
+        handler: Optional[MessageHandler] = None,
         subscribe_to_broadcast: bool = True,
         block_ms: int = DEFAULT_BLOCK_MS,
         read_count: int = DEFAULT_READ_COUNT,
@@ -88,7 +89,7 @@ class MessageSubscriber:
             claim_min_idle_ms: Minimum idle time (ms) before claiming pending messages.
             max_retries: Maximum redelivery attempts before dropping a message.
         """
-        self._redis = redis_client
+        self.client = redis_client
         self._agent_id = agent_id
         self._handler = handler
         self._subscribe_to_broadcast = subscribe_to_broadcast
@@ -128,7 +129,7 @@ class MessageSubscriber:
             group: The consumer group name.
         """
         try:
-            await self._redis.xgroup_create(
+            await self.client.xgroup_create(
                 name=stream,
                 groupname=group,
                 id="0",  # Start reading from the beginning for new groups
@@ -166,7 +167,7 @@ class MessageSubscriber:
 
         try:
             # XAUTOCLAIM returns: [next_start_id, [[id, fields], ...], [deleted_ids]]
-            result = await self._redis.xautoclaim(
+            result = await self.client.xautoclaim(
                 name=stream,
                 groupname=group,
                 consumername=consumer,
@@ -241,7 +242,7 @@ class MessageSubscriber:
             entry_id: The stream entry ID to acknowledge.
         """
         try:
-            await self._redis.xack(stream, group, entry_id)
+            await self.client.xack(stream, group, entry_id)
             logger.debug(f"Acknowledged entry {entry_id} on '{stream}/{group}'.")
         except (RedisConnectionError, RedisTimeoutError) as e:
             logger.warning(
@@ -267,11 +268,18 @@ class MessageSubscriber:
             f"group='{group}', consumer='{consumer}'"
         )
 
+        # Get the handler for this stream (fall back to default)
+        handler = self._stream_handlers.get(stream, self._handler) if hasattr(self, '_stream_handlers') else self._handler
+        if handler is None:
+            logger.warning(f"No handler registered for stream {stream}, dropping message")
+            await self._acknowledge(stream, group, entry_id)
+            return  # Exit the read loop for this stream
+        
         # First, process any pending (previously claimed) messages
         pending = await self._claim_pending_messages(stream, group, consumer)
         for msg in pending:
             try:
-                await self._handler(msg)
+                await handler(msg)
             except Exception as e:
                 logger.error(
                     f"Handler error processing pending message "
@@ -283,7 +291,7 @@ class MessageSubscriber:
         while self._running:
             try:
                 # XREADGROUP: read new messages (id=">")
-                responses = await self._redis.xreadgroup(
+                responses = await self.client.xreadgroup(
                     groupname=group,
                     consumername=consumer,
                     streams={stream: ">"},
@@ -316,7 +324,9 @@ class MessageSubscriber:
 
                         # Invoke handler
                         try:
-                            await self._handler(message)
+                            logger.debug(f"Invoking handler for message {message.message_id} on stream {stream}")
+                            await handler(message)
+                            logger.debug(f"Handler completed for message {message.message_id}")
                             await self._acknowledge(stream, group, entry_id)
                         except Exception as e:
                             logger.error(
@@ -385,6 +395,14 @@ class MessageSubscriber:
         # Ensure consumer groups exist
         await self._ensure_consumer_group(self._stream, self._group)
 
+        # Register the main stream handler through the stream_handlers mechanism
+        if not hasattr(self, '_stream_handlers'):
+            self._stream_handlers = {}
+        # The _read_loop already deserializes messages to AegisMessage objects,
+        # so we can store the handler directly without wrapping.
+        if self._handler is not None:
+            self._stream_handlers[self._stream] = self._handler
+
         # Launch dedicated stream read loop
         task = asyncio.create_task(
             self._read_loop(self._stream, self._group, self._consumer),
@@ -428,3 +446,38 @@ class MessageSubscriber:
 
         self._tasks.clear()
         logger.info(f"Subscriber '{self._agent_id}' stopped.")
+
+    async def subscribe(self, stream: str, handler: Callable[[AegisMessage], Awaitable[None]]) -> None:
+            """
+            Subscribe to an additional stream with a custom handler.
+
+            This creates a new consumer group and read loop for the given stream.
+
+            Args:
+                stream: The Redis stream key to subscribe to.
+                handler: Async callback invoked for each AegisMessage (will be deserialized from stream data).
+            """
+            if not self._running:
+                raise RuntimeError("Subscriber not started. Call start() first.")
+
+            # Create a unique consumer group name for this stream
+            group = f"{CONSUMER_GROUP_PREFIX}{self._agent_id}:{stream.replace(':', '_')}"
+            consumer = f"{self._agent_id}-consumer-{len(self._tasks)}"
+
+            # Ensure consumer group exists
+            await self._ensure_consumer_group(stream, group)
+
+            # Launch a new read loop task for this stream
+            task = asyncio.create_task(
+                self._read_loop(stream, group, consumer),
+                name=f"subscriber-{self._agent_id}-{stream.replace(':', '-')}",
+            )
+
+            # The _read_loop already deserializes messages to AegisMessage objects,
+            # so we don't need to wrap the handler for deserialization.
+            # Just store the handler directly.
+            self._stream_handlers[stream] = handler
+
+            self._tasks.append(task)
+
+            logger.info(f"Subscriber '{self._agent_id}' subscribed to '{stream}'")

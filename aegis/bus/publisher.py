@@ -53,7 +53,7 @@ class MessagePublisher:
             max_stream_length: Maximum approximate stream length before
                 trimming. Set to None for unbounded streams.
         """
-        self._redis = redis_client
+        self.client = redis_client
         self._max_stream_length = max_stream_length
 
     def _serialize_message(self, message: AegisMessage) -> dict[str, str]:
@@ -108,6 +108,19 @@ class MessagePublisher:
         """
         return await self._xadd(BROADCAST_STREAM, message)
 
+    async def publish_to_stream(self, stream_key: str, message: AegisMessage) -> Optional[str]:
+        """
+        Publish a message directly to a specific Redis stream.
+
+        Args:
+            stream_key: The full Redis stream key (e.g., 'aegis:stream:custom:channel')
+            message: The AegisMessage to publish
+
+        Returns:
+            The stream entry ID on success, or None on failure.
+        """
+        return await self._xadd(stream_key, message)
+
     async def _xadd(self, stream_key: str, message: AegisMessage) -> Optional[str]:
         """
         Internal method to execute XADD on a given stream.
@@ -122,7 +135,7 @@ class MessagePublisher:
         serialized = self._serialize_message(message)
 
         try:
-            entry_id = await self._redis.xadd(
+            entry_id = await self.client.xadd(
                 name=stream_key,
                 fields=serialized,
                 maxlen=self._max_stream_length,

@@ -12,12 +12,12 @@ from aegis.schemas.message import AegisMessage, MessageType, Priority
 
 
 @pytest.fixture
-def agent(tmp_path):
+async def agent(tmp_path):
     """Create a JanusAgent with temporary storage."""
     a = JanusAgent(data_dir=tmp_path)
-    asyncio.get_event_loop().run_until_complete(a.startup())
+    await a.startup()
     yield a
-    asyncio.get_event_loop().run_until_complete(a.shutdown())
+    await a.shutdown()
 
 
 def _make_message(action: str, payload: dict, tenant_id: str = "test-tenant") -> AegisMessage:

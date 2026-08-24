@@ -38,6 +38,9 @@ from aegis.manager.agent_registry import (
     get_startup_order,
 )
 from aegis.manager.scheduler import AegisScheduler
+from aegis.bus.publisher import MessagePublisher
+from aegis.bus.subscriber import MessageSubscriber
+from aegis.schemas.message import AegisMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -196,15 +199,19 @@ class SystemManager:
             _deep_merge(self._config, config_override)
 
         self._sm_config = self._config.get("system_manager", DEFAULT_CONFIG["system_manager"])
-        self._redis_config = self._config.get("redis", DEFAULT_CONFIG["redis"])
+        self.client_config = self._config.get("redis", DEFAULT_CONFIG["redis"])
         self._sched_config = self._config.get("scheduler", DEFAULT_CONFIG["scheduler"])
 
         self._agents: Dict[str, AgentState] = {}
         self._scheduler: Optional[AegisScheduler] = None
-        self._redis_conn: Optional[Any] = None
+        self.client_conn: Optional[Any] = None
         self._health_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
         self._running = False
+
+        # Bus publisher and subscriber for agent communication
+        self._bus_publisher: Optional[MessagePublisher] = None
+        self._bus_subscriber: Optional[MessageSubscriber] = None
 
         # Initialize agent states from registry
         for entry in AGENT_REGISTRY:
@@ -315,18 +322,18 @@ class SystemManager:
             import redis.asyncio as aioredis
 
             # Safe extraction: Uses dot-notation for objects, or falls back to .get() if it's a dict
-            if isinstance(self._redis_config, dict):
-                host = self._redis_config.get("host", "localhost")
-                port = self._redis_config.get("port", 6379)
-                db = self._redis_config.get("db", 0)
+            if isinstance(self.client_config, dict):
+                host = self.client_config.get("host", "localhost")
+                port = self.client_config.get("port", 6379)
+                db = self.client_config.get("db", 0)
             else:
                 # Read attributes directly from the RedisConfig object structure
-                host = getattr(self._redis_config, "host", "localhost")
-                port = getattr(self._redis_config, "port", 6379)
-                db = getattr(self._redis_config, "db", 0)
+                host = getattr(self.client_config, "host", "localhost")
+                port = getattr(self.client_config, "port", 6379)
+                db = getattr(self.client_config, "db", 0)
 
-            self._redis_conn = aioredis.Redis(host=host, port=port, db=db)
-            pong = await self._redis_conn.ping()
+            self.client_conn = aioredis.Redis(host=host, port=port, db=db, decode_responses=True)
+            pong = await self.client_conn.ping()
             if pong:
                 logger.info("[Redis] Connected to %s:%s (db=%s)", host, port, db)
             else:
@@ -345,6 +352,10 @@ class SystemManager:
             )
             raise SystemExit(1)
 
+        # Initialize bus publisher after Redis connection
+        self._bus_publisher = MessagePublisher(self.client_conn)
+        # Note: Each agent creates its own MessageSubscriber with its own agent_id
+        self._bus_subscriber = None
 
     async def _start_scheduler(self) -> None:
         """Initialize and start the Aegis Scheduler service."""
@@ -355,11 +366,11 @@ class SystemManager:
 
         # Create bus publisher that writes to Redis Streams
         async def bus_publisher(message: Dict[str, Any]) -> None:
-            if self._redis_conn is None:
+            if self.client_conn is None:
                 raise RuntimeError("Redis not connected")
             target = message.get("target_agent", "torchestrator")
             stream_key = f"aegis:stream:{target}"
-            await self._redis_conn.xadd(
+            await self.client_conn.xadd(
                 stream_key,
                 {"data": json.dumps(message, default=str)},
             )
@@ -400,12 +411,14 @@ class SystemManager:
 
         try:
             # Instantiate the agent
-            # Agents may accept config, redis_conn, etc.
+            # Agents may accept config, redis_conn, bus_publisher, bus_subscriber, etc.
             agent_config = self._config.get(entry.config_key, {}) if entry.config_key else {}
             try:
                 instance = cls(
                     config=agent_config,
-                    redis_conn=self._redis_conn,
+                    redis_conn=self.client_conn,
+                    bus_publisher=self._bus_publisher,
+                    bus_subscriber=self._bus_subscriber,
                 )
             except TypeError:
                 # Fallback if agent doesn't accept these kwargs
@@ -482,10 +495,10 @@ class SystemManager:
             logger.info("[Scheduler] Stopped")
 
         # Close Redis
-        if self._redis_conn:
+        if self.client_conn:
             logger.info("[Redis] Closing connection...")
-            await self._redis_conn.close()
-            self._redis_conn = None
+            await self.client_conn.close()
+            self.client_conn = None
             logger.info("[Redis] Connection closed")
 
         logger.info("=" * 60)
@@ -656,9 +669,9 @@ class SystemManager:
         if identity_state is None or identity_state.instance is None:
             return
 
-        if hasattr(identity_state.instance, "is_first_run"):
+        if hasattr(identity_state.instance, "needs_bootstrap"):
             try:
-                is_first = await identity_state.instance.is_first_run()
+                is_first = await identity_state.instance.needs_bootstrap()
                 if is_first:
                     logger.info(
                         "=" * 60 + "\n"
@@ -698,9 +711,9 @@ class SystemManager:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             "redis": {
-                "connected": self._redis_conn is not None,
-                "host": self._redis_config.get("host"),
-                "port": self._redis_config.get("port"),
+                "connected": self.client_conn is not None,
+                "host": self.client_config.get("host"),
+                "port": self.client_config.get("port"),
             },
             "scheduler": {
                 "enabled": self._sched_config.get("enabled", True),

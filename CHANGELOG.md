@@ -5,6 +5,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0] - 2026-08-23
+### Restored
+- **aegis_config.yaml** — Restored the default configuration template that was lost during the chunk13-frx merge (commit 2bec458). The file had been empty (`{}`) since the secrets management and workflow promotion merge.
+- **Oracle Configuration** — Added complete OpenRouter provider with 7 free tier models (Nemotron 3 Ultra, Nemotron 3.5 Lightning, Gemma 4 26B, Gemma 4 31B, GLM 5.2, GPT-OSS 20B) supporting tiered fallback via work-tracker ModelRouter.
+- **New Subsystem Configs** — Added configurations for Janus (API Gateway), Warden (Authorization), Identity (User/Tenant with Argon2), Observer (Observability), and Forge (Task Execution).
+- **Enhanced Oracle Subsystems** — Response cache, rate limiting, token budget management, and prompt templates all fully configured.
+- **Provider Configuration** — Both Ollama (local) and OpenRouter (cloud) providers enabled with proper defaults for tiered model selection.
+
+### Fixed
+- Config file now loads correctly through all code paths: `aegis.config.loader.load_config()`, `SystemManager._load_config()`, `OracleAgent`, `LLMRegistry`, and CLI `aegis config show`.
+- `aegis install` bootstrap phase — Fixed issue where bootstrap failed if identity store already contained tenants from previous runs. Added pre-bootstrap check to detect fresh installs vs re-runs. The install now works correctly on both fresh systems and re-runs.
+- `aegis start` — Added missing `plotly` dependency to web extra and install command. Added graceful error handling when web dependencies are not installed.
+
+---
+
 ## [0.1.0] - CHUNK-001 - 2026-04-23
 
 ### Added
@@ -550,4 +565,204 @@ Cash — that's the full build. All 12 chunks from Foundation → Intelligence �
 The infrastructure for a deliberately engineered system is built. Time to boot it up. 🔥
 
 -----
+
+## [0.13.1] - 2026-08-18
+### Fixed — Bootstrap Command Timeout Bug
+- **Root Cause:** IdentityAgent `startup()` created two consumer groups on the same Redis stream (`aegis:stream:identity`):
+  1. `MessageSubscriber` → `aegis:group:identity` (reads new messages, id=">")
+  2. `subscribe()` call for main stream → `aegis:group:identity:aegis_stream_identity` (reads from beginning, id="0")
+  This caused duplicate message processing — messages handled by both consumer groups, with CLI receiving response from failed second attempt.
+
+- **Fix Applied:**
+  - `aegis/agents/identity/agent.py`: Added legacy consumer group cleanup via `XGROUP DESTROY` at startup. Skip re-subscription to main stream since `MessageSubscriber.start()` already handles it.
+  - `aegis/manager/system_manager.py`: Added `decode_responses=True` to Redis connection to prevent byte-string "missing 'data' field" warnings.
+  - `aegis/bus/subscriber.py`: Cleaned up debug print statements. Fixed handler registration in `start()` and updated `subscribe()` to accept `AegisMessage` directly.
+
+### Updated Documentation
+- **README.md:** Complete rewrite of Quick Setup section with:
+  - Redis installation instructions (Ubuntu/macOS/Docker)
+  - First-run bootstrap command usage with examples
+  - System startup instructions
+
+### Verification
+- All 510 tests pass
+- Bootstrap command now completes successfully:
+  ```bash
+  aegis user bootstrap --username root --tenant-name Default
+  aegis start
+  ```
+
+-----
+
+## [0.13.2] - 2026-08-19
+### Added — `aegis install` First-Run Installation Command
+- **New CLI Command:** `aegis install` — Complete first-run automation
+  - Installs optional dependencies (web UI, MCP server)
+  - Starts Redis if not running (supports systemd, Homebrew, direct redis-server)
+  - Starts the Aegis system (all 8 agents + Mission Control web UI)
+  - Bootstraps the identity store with configurable root user and tenant
+  - Customizable via CLI options: `--username`, `--name`, `--passphrase`, `--tenant-name`
+  - Options to skip steps: `--skip-deps`, `--skip-redis`
+
+### Updated Documentation
+- **README.md:** Complete rewrite of Quick Setup section with:
+  - One-command installation (`aegis install`) as the recommended path
+  - Manual installation steps for step-by-step control
+  - Clear separation of automated vs manual setup
+
+### Verification
+- All 510 tests pass
+- One-command installation works:
+  ```bash
+  aegis install
+  # or with custom options
+  aegis install --username myadmin --name "System Admin" --passphrase "secure123" --tenant-name "MyOrg"
+  ```
+
+-----
+
+## [SYSTEM SNAPSHOT - 2026-08-20] — Architecture Assessment & OOBE Evaluation
+
+**Purpose:** This snapshot captures the current state of Aegis as assessed on 2026-08-20. It serves as a baseline for future improvements and a reference for architectural decisions. This entry is intentionally detailed to capture nuanced architectural observations that may inform future development priorities.
+
+---
+
+### 📸 SYSTEM SNAPSHOT - 2026-08-20
+
+**Version:** 0.13.2 (Genesis OOBE Complete)  
+**Test Status:** 510/510 tests passing  
+**Last Commit:** a2a90e1 (utils/dev.py + delete-aegis)
+
+---
+
+#### 🎯 FIRST-RUN EXPERIENCE (OOBE) ASSESSMENT
+
+**Current State: ✅ Functional**
+- `aegis install` — One-command automation (deps, Redis, system, bootstrap)
+- `aegis start` — Full system startup with health checks
+- `aegis user bootstrap` — Manual bootstrap for custom configurations
+- Health endpoints functional (Mission Control + Observer)
+- Bootstrap creates root user + Default tenant with all system roles
+
+**Improvements Identified:**
+| Priority | Improvement | Effort | Impact |
+|----------|-------------|--------|--------|
+| High | Interactive setup wizard (`aegis setup`) | Medium | Reduces friction for new users |
+| High | Progress indicators/spinners during install | Low | Better perceived performance |
+| Medium | Post-install health verification | Low | Confidence in successful setup |
+| Medium | Docker Compose one-liner | Low | Container-native deployments |
+| Medium | Migration/upgrade path detection | Medium | Existing user retention |
+| Low | Config validation pre-flight | Low | Early error detection |
+| Low | Interactive onboarding prompts | Medium | Guided first-run |
+
+---
+
+#### ⚙️ UVICORN + VENV CLARIFICATION
+
+**Current Implementation: ✅ Correct**
+- `python -m venv .venv` creates isolated Python environment
+- `pip install -e ".[dev]"` installs deps including `uvicorn`
+- `aegis start` → `uvicorn.Server(uvicorn.Config(...)).serve()` runs ASGI app
+- Virtual environment isolates deps; Uvicorn runs the ASGI app inside it
+
+**No fix needed** — Architecture is correct. The confusion stemmed from README showing venv creation before `aegis start`.
+
+---
+
+#### 🏗️ OUT-OF-BOX CAPABILITIES vs USER-PROVIDED
+
+**✅ OUT OF THE BOX (after `aegis install`):**
+| Capability | Agent | Details |
+|------------|-------|---------|
+| Multi-tenant Identity | Identity | Root user, tenant, 4 roles (root/admin/member/observer) |
+| Security/Authorization | Warden | RBAC, shell allowlist, emergency bypass, interception |
+| Observability | Observer | Heartbeats, metrics, health endpoint, structured logging |
+| Memory (6 tiers) | Lexicon | L0-L5: Core, Domain, Workflow, Episodic, Artifact, Scratchpad |
+| Governance | Janus | 12 default policies, safe DSL evaluator |
+| LLM Gateway | Oracle | Ollama + OpenAI-compatible, caching, rate limiting |
+| Execution | Forge | 11 tools (file, shell, git, http, json, schedule) |
+| Skills | Forge | 6 skills (web, summarize, git, redteam, RLM, onboard) |
+| Orchestration | TOrchestrator | Intent parsing, decomposition, sessions, synthesis |
+| Interfaces | CLI/Web/MCP | Dashboard, chat, memory, users, schedule, logs |
+| Scheduling | Scheduler | Cron, interval, one-time, persistent JobStore |
+| System Mgmt | SysMgr | Ordered startup/shutdown, health, auto-restart |
+
+**👤 USER MUST PROVIDE/BUILD:**
+| Category | What's Needed | Effort |
+|----------|---------------|--------|
+| LLM Models | Run Ollama locally or provide OpenAI-compatible API | Low (install) |
+| Custom Skills/Tools | Domain-specific automation (e.g., Jira, Slack, DB) | Medium |
+| Custom Policies | Org-specific governance rules | Low-Medium |
+| Integrations | External APIs, databases, services | Medium-High |
+| Frontend Customization | Custom dashboards, branding | Low-Medium |
+| Domain Knowledge | L0 (identity), L1 (docs), L2 (workflows) | Ongoing |
+| Infrastructure | Redis (required), optional PostgreSQL, monitoring | Low |
+
+---
+
+#### ⏰ CRON JOBS STATUS
+**Current:** No default cron jobs pre-configured. Scheduler runs but JobStore is empty.
+**Recommendation:** Add default maintenance jobs (log rotation, metric eviction, backup triggers) in future.
+
+---
+
+#### 🏛️ ARCHITECTURE ASSESSMENT
+
+**Overall: WELL-BALANCED — Not too complex, not too primitive**
+
+**✅ STRENGTHS (Keep/Enhance):**
+- **Clear separation of concerns** — Each agent single responsibility
+- **Event-driven via Redis Streams** — Decoupled, scalable, observable
+- **Agent Registry** — Dynamic management with priority ordering
+- **Protocol-first** — Typed AegisMessage envelopes for all communication
+- **Security-first** — Warden intercepts ALL messages
+- **Self-monitoring** — Observer self-heartbeat (RT-3), auto-restart (RT-4)
+- **Protocol-first schemas** — Type-safe inter-agent contracts
+
+**⚠️ COULD SIMPLIFY (Reduce Complexity):**
+| Component | Issue | Recommendation |
+|-----------|-------|----------------|
+| 12 Chunks | Too many granular chunks | Merge related (e.g., Observer+Logger, Forge+Skills) |
+| 6 Memory Tiers | L0-L5 complex for OOBE | Start with 3 (Core, Domain, Episodic); add L2/L4/L5 as needed |
+| Skill/Tool Manifests | Verbose boilerplate | Decorator-based registration |
+| Schema Duplication | Overlap between agent schemas | Consolidate shared schemas |
+| MCP Server | Optional/standalone | Make pluggable, not core |
+
+**❌ MISSING FOR PRODUCTION OOBE (Add These):**
+| Capability | Priority | Description |
+|------------|----------|-------------|
+| Plugin System | High | Dynamic agent/skill loading from external packages |
+| Distributed Tracing | High | OpenTelemetry integration out of box |
+| Secret Management | High | Vault/keyring integration for API keys |
+| Backup/Restore | High | Automated backup of all stores (SQLite + Redis) |
+| Multi-node HA | Medium | Leader election for System Manager |
+| Webhook System | Medium | External event ingestion |
+| Plugin Marketplace | Medium | Skill/tool discovery and installation |
+| Evaluation Framework | Medium | Skill/agent testing harness |
+| Migration System | Medium | Schema/db versioning and migration |
+| Webhook System | Medium | External event ingestion |
+
+---
+
+#### 📊 COMPLEXITY VERDICT
+
+**Not too complex, not too primitive — RIGHT LEVEL for the ambition.**
+
+The modular agent design with Redis Streams is the right abstraction level. The main gaps are **operational tooling** (backups, HA, secrets) and **developer experience** (plugins, marketplace, evaluation). The core architecture supports these additions without fundamental changes.
+
+---
+
+#### 🎯 RECOMMENDED NEXT 3 PRIORITIES
+
+1. **Plugin System + Marketplace** — Enables ecosystem growth without core changes
+2. **Backup/Restore + HA** — Production readiness
+3. **Distributed Tracing + Secret Management** — Observability + Security foundations
+
+---
+
+**Snapshot Complete.** This baseline will be referenced for future architectural decisions and improvement tracking.
+
+-----
+
+"
 

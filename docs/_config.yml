@@ -1,0 +1,9 @@
+title: Aegis Documentation
+description: Multi-Agent System Development Guide
+theme: minima
+markdown: kramdown
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true

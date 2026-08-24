@@ -18,6 +18,7 @@ Constants:
     - BROADCAST_STREAM: The system-wide broadcast stream key.
 """
 
+from aegis.bus.redis_bus import RedisBus
 from aegis.bus.connection import RedisConnectionManager
 from aegis.bus.publisher import MessagePublisher
 from aegis.bus.subscriber import MessageSubscriber
