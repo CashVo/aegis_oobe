@@ -64,7 +64,7 @@ class ObserverAgent(BaseAgent):
                 - heartbeat_interval (float): Seconds between expected heartbeats. Default: 10.0
                 - missed_threshold (int): Missed beats before UNRESPONSIVE. Default: 3
                 - degraded_threshold (int): Missed beats before DEGRADED. Default: 1
-                - health_host (str): Health server bind address. Default: "127.0.0.1"
+                - health_host (str): Health server bind address. Default: "0.0.0.0"
                 - health_port (int): Health server bind port. Default: 8421
                 - metrics_retention_seconds (float): Metric retention. Default: 3600.0
                 - max_samples_per_metric (int): Max samples per series. Default: 10000
@@ -91,13 +91,17 @@ class ObserverAgent(BaseAgent):
 
         self._health_server = HealthServer(
             health_provider=self._build_health_report,
-            host=self._config.get("health_host", "127.0.0.1"),
+            host=self._config.get("health_host", "0.0.0.0"),
             port=self._config.get("health_port", 8421),
         )
 
         # Logger (uses structlog when available, fallback to stderr)
         self._logger = None
         self._fallback_logger = FallbackLogger(agent_id=self.agent_id)
+
+        # Bus references (set by SystemManager)
+        self._bus_publisher = None
+        self._bus_subscriber = None
 
         # Self-heartbeat task
         self._self_heartbeat_task: Optional[asyncio.Task] = None
@@ -123,7 +127,7 @@ class ObserverAgent(BaseAgent):
         # Start health HTTP server
         try:
             await self._health_server.start()
-            self._log("info", f"Health endpoint available at http://{self._config.get('health_host', '127.0.0.1')}:{self._config.get('health_port', 8421)}/health")
+            self._log("info", f"Health endpoint available at http://{self._config.get('health_host', '0.0.0.0')}:{self._config.get('health_port', 8421)}/health")
         except Exception as e:
             self._log("error", f"Failed to start health server: {e}")
 
@@ -291,11 +295,22 @@ class ObserverAgent(BaseAgent):
         """
         uptime = time.time() - self._start_time if self._start_time else 0.0
 
+        # Check Redis connectivity if we have access to the bus
+        redis_connected = False
+        try:
+            # Try to get the bus from the observer's config or attributes
+            if hasattr(self, '_bus_publisher') and self._bus_publisher:
+                redis_connected = self._bus_publisher.client is not None
+            elif hasattr(self, '_bus_subscriber') and self._bus_subscriber:
+                redis_connected = self._bus_subscriber.client is not None
+        except Exception:
+            pass
+
         return SystemHealthReport(
             system_status=self._heartbeat_monitor.get_system_health(),
             observer_uptime_seconds=uptime,
             agents=self._heartbeat_monitor.get_all_statuses(),
-            redis_connected=True,  # Will be wired to actual check via bus integration
+            redis_connected=redis_connected,
             total_messages_processed=self._messages_processed,
             total_metrics_collected=self._metrics_collector.total_collected,
             active_alerts=list(self._alerts[-50:]),  # Last 50 alerts

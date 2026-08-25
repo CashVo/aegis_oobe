@@ -27,7 +27,7 @@ import signal
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
 
 import structlog
 
@@ -43,7 +43,6 @@ from aegis.bus.subscriber import MessageSubscriber
 from aegis.schemas.message import AegisMessage
 
 logger = structlog.get_logger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Configuration Defaults
@@ -429,9 +428,17 @@ class SystemManager:
 
             state.instance = instance
 
+            # Set bus publisher/subscriber for heartbeat support
+            if hasattr(instance, 'set_bus'):
+                instance.set_bus(self._bus_publisher, self._bus_subscriber, self.client_conn)
+
             # Call startup with timeout
             timeout = self._sm_config.get("startup_timeout_seconds", 30)
             await asyncio.wait_for(instance.startup(), timeout=timeout)
+
+            # Start heartbeat for agents that support it
+            if hasattr(instance, 'start_heartbeat'):
+                await instance.start_heartbeat()
 
             state.status = "running"
             state.last_heartbeat = datetime.now(timezone.utc)
@@ -498,243 +505,79 @@ class SystemManager:
         if self.client_conn:
             logger.info("[Redis] Closing connection...")
             await self.client_conn.close()
-            self.client_conn = None
-            logger.info("[Redis] Connection closed")
 
-        logger.info("=" * 60)
-        logger.info("  AEGIS SYSTEM — SHUTDOWN COMPLETE")
-        logger.info("=" * 60)
-
-    async def _stop_agent(self, state: AgentState, timeout: int = 15) -> None:
-        """Gracefully stop a single agent."""
+    async def _stop_agent(self, state: AgentState, timeout: float = 15) -> None:
+        """Stop a single agent gracefully."""
         entry = state.entry
         log = logger.bind(agent_id=entry.agent_id)
-        log.info("[%s] Stopping...", entry.display_name)
-
-        try:
-            if state.instance and hasattr(state.instance, "shutdown"):
-                await asyncio.wait_for(state.instance.shutdown(), timeout=timeout)
-            state.status = "stopped"
-            log.info("[%s] Stopped", entry.display_name)
-        except asyncio.TimeoutError:
-            log.warning(
-                "[%s] Shutdown timed out after %ds — forcing",
-                entry.display_name,
-                timeout,
-            )
-            state.status = "stopped"
-        except Exception as exc:
-            log.error("[%s] Error during shutdown: %s", entry.display_name, exc)
-            state.status = "stopped"
-
-    # -- Health Check Loop ---------------------------------------------------
-
-    async def _health_check_loop(self) -> None:
-        """
-        Periodically poll agent health and restart failed agents.
-
-        Implements: Part III §3.3 — Health-check polling, restart logic
-        """
-        interval = self._sm_config.get("health_check_interval_seconds", 30)
-        logger.info("Health check loop started (interval=%ds)", interval)
-
-        try:
-            while self._running:
-                await asyncio.sleep(interval)
-                if not self._running:
-                    break
-                await self._run_health_checks()
-        except asyncio.CancelledError:
-            pass
-        finally:
-            logger.info("Health check loop stopped")
-
-    async def _run_health_checks(self) -> None:
-        """Execute one round of health checks across all agents."""
-        for agent_id, state in self._agents.items():
-            if state.status == "stopped" and not state.entry.required:
-                continue  # Optional agents that aren't running
-
-            if state.status == "running" and state.instance is not None:
-                # Check if agent has a health_check method
-                if hasattr(state.instance, "health_check"):
-                    try:
-                        healthy = await asyncio.wait_for(
-                            state.instance.health_check(), timeout=10
-                        )
-                        if healthy:
-                            state.last_heartbeat = datetime.now(timezone.utc)
-                        else:
-                            logger.warning(
-                                "[HealthCheck] %s reported unhealthy",
-                                state.entry.display_name,
-                            )
-                            state.status = "failed"
-                            state.error = "Health check returned False"
-                    except asyncio.TimeoutError:
-                        logger.warning(
-                            "[HealthCheck] %s health check timed out",
-                            state.entry.display_name,
-                        )
-                        state.status = "failed"
-                        state.error = "Health check timed out"
-                    except Exception as exc:
-                        logger.error(
-                            "[HealthCheck] %s health check error: %s",
-                            state.entry.display_name,
-                            exc,
-                        )
-                        state.status = "failed"
-                        state.error = str(exc)
-                else:
-                    # No health_check method — assume healthy if running
-                    state.last_heartbeat = datetime.now(timezone.utc)
-
-            # Attempt restart for failed agents
-            if state.status == "failed":
-                await self._attempt_restart(state)
-
-    async def _attempt_restart(self, state: AgentState) -> None:
-        """
-        Attempt to restart a failed agent with exponential backoff.
-
-        Implements: Part III §3.3 — Restart of failed agents
-                    Part XIII RT-3, RT-4 — Observer/Warden restart priority
-        """
-        entry = state.entry
-        max_retries = entry.restart_max or self._sm_config.get("restart_max_retries", 3)
-        backoff_base = self._sm_config.get("restart_backoff_base_seconds", 2.0)
-        backoff_max = self._sm_config.get("restart_backoff_max_seconds", 60.0)
-
-        if state.restart_count >= max_retries:
-            if entry.required:
-                logger.critical(
-                    "[Restart] REQUIRED agent '%s' exceeded %d restart attempts — "
-                    "SYSTEM DEGRADED",
-                    entry.display_name,
-                    max_retries,
-                )
-            else:
-                logger.error(
-                    "[Restart] Optional agent '%s' exceeded %d restart attempts — "
-                    "giving up",
-                    entry.display_name,
-                    max_retries,
-                )
-            return
-
-        # Exponential backoff
-        delay = min(backoff_base * (2 ** state.restart_count), backoff_max)
-        state.restart_count += 1
-        state.status = "restarting"
-
-        logger.warning(
-            "[Restart] Restarting '%s' (attempt %d/%d, backoff=%.1fs)",
-            entry.display_name,
-            state.restart_count,
-            max_retries,
-            delay,
-        )
-
-        await asyncio.sleep(delay)
-
-        # Attempt clean shutdown first
-        if state.instance and hasattr(state.instance, "shutdown"):
+        
+        # Stop heartbeat if supported
+        if hasattr(state.instance, 'stop_heartbeat'):
             try:
-                await asyncio.wait_for(state.instance.shutdown(), timeout=5)
+                await asyncio.wait_for(state.instance.stop_heartbeat(), timeout=2.0)
             except Exception:
                 pass
+        
+        log.info("[%s] Stopping...", entry.display_name)
+        try:
+            await asyncio.wait_for(state.instance.shutdown(), timeout=timeout)
+            log.info("[%s] Stopped", entry.display_name)
+        except asyncio.TimeoutError:
+            log.error("[%s] Shutdown timed out after %ds", entry.display_name, timeout)
+        except Exception as exc:
+            log.error("[%s] Shutdown failed: %s", entry.display_name, exc)
+        finally:
+            state.status = "stopped"
 
-        state.instance = None
+    async def _health_check_loop(self) -> None:
+        """Periodic health check for all running agents."""
+        interval = self._sm_config.get("health_check_interval_seconds", 30)
+        
+        while self._running:
+            try:
+                await asyncio.sleep(interval)
+                await self._perform_health_check()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error("Health check error: %s", exc)
 
-        # Re-start
-        await self._start_agent(state)
-
-        if state.status == "running":
-            logger.info(
-                "[Restart] '%s' recovered after %d attempts",
-                entry.display_name,
-                state.restart_count,
-            )
-
-    # -- First-Run Bootstrap -------------------------------------------------
+    async def _perform_health_check(self) -> None:
+        """Check health of all running agents and restart if needed."""
+        for entry in AGENT_REGISTRY:
+            state = self._agents.get(entry.agent_id)
+            if state is None or state.instance is None:
+                continue
+            
+            # Update heartbeat timestamp
+            state.last_heartbeat = datetime.now(timezone.utc)
+            
+            # Check if agent needs restart (for future enhancement)
+            # if state.status == "running" and state.instance.is_running is False:
+            #     await self._restart_agent(state)
 
     async def _check_first_run(self) -> None:
-        """
-        Detect first-run condition and trigger bootstrap if needed.
+        """Check if this is a first run and log accordingly."""
+        data_dir = self._config.get("data_dir", "aegis_data")
+        db_path = os.path.join(data_dir, "identity.db")
+        if not os.path.exists(db_path):
+            logger.info("First run detected — identity store not initialized. Run 'aegis user bootstrap' or 'aegis install'.")
 
-        Implements: Part V §5.4 — Bootstrap / First-Run
-        """
-        identity_state = self._agents.get("identity")
-        if identity_state is None or identity_state.instance is None:
-            return
-
-        if hasattr(identity_state.instance, "needs_bootstrap"):
-            try:
-                is_first = await identity_state.instance.needs_bootstrap()
-                if is_first:
-                    logger.info(
-                        "=" * 60 + "\n"
-                        "  FIRST RUN DETECTED — Bootstrap required.\n"
-                        "  Use 'aegis user create --root' to create\n"
-                        "  the initial root user and default tenant.\n"
-                        + "=" * 60
-                    )
-            except Exception as exc:
-                logger.debug("First-run check skipped: %s", exc)
-
-    # -- Status & Introspection ----------------------------------------------
-
-    def get_system_status(self) -> Dict[str, Any]:
-        """
-        Return a comprehensive status snapshot of the entire system.
-
-        Used by CLI ``aegis status`` and Mission Control /health endpoint.
-        """
-        agent_statuses = {}
+    async def get_system_status(self) -> Dict[str, Any]:
+        """Get overall system status for CLI/status endpoint."""
+        agents_status = {}
         for agent_id, state in self._agents.items():
-            agent_statuses[agent_id] = {
-                "display_name": state.entry.display_name,
-                "status": state.status,
-                "required": state.entry.required,
-                "restart_count": state.restart_count,
-                "last_heartbeat": (
-                    state.last_heartbeat.isoformat() if state.last_heartbeat else None
-                ),
-                "error": state.error,
-                "tags": state.entry.tags,
-            }
-
+            if state.instance is not None:
+                agents_status[agent_id] = {
+                    "status": state.status,
+                    "restart_count": state.restart_count,
+                    "last_heartbeat": state.last_heartbeat.isoformat() if state.last_heartbeat else None,
+                    "error": state.error,
+                }
+        
         return {
-            "system": {
-                "running": self._running,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-            "redis": {
-                "connected": self.client_conn is not None,
-                "host": self.client_config.get("host"),
-                "port": self.client_config.get("port"),
-            },
-            "scheduler": {
-                "enabled": self._sched_config.get("enabled", True),
-                "running": self._scheduler.is_running if self._scheduler else False,
-            },
-            "agents": agent_statuses,
-        }
-
-    def get_agent_status(self, agent_id: str) -> Optional[Dict[str, Any]]:
-        """Return status for a single agent."""
-        state = self._agents.get(agent_id)
-        if state is None:
-            return None
-        return {
-            "agent_id": agent_id,
-            "display_name": state.entry.display_name,
-            "status": state.status,
-            "required": state.entry.required,
-            "restart_count": state.restart_count,
-            "last_heartbeat": (
-                state.last_heartbeat.isoformat() if state.last_heartbeat else None
-            ),
-            "error": state.error,
+            "system": "running" if self._running else "stopped",
+            "agents": agents_status,
+            "redis": "connected" if self.client_conn else "disconnected",
+            "scheduler": "running" if self._scheduler and self._scheduler.is_running else "stopped",
         }

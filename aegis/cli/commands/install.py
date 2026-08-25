@@ -279,6 +279,13 @@ def install(
     After completion, the system will be running and accessible at http://localhost:8420
     """
 
+    import sys
+    
+    # Environment info
+    venv_path = sys.prefix
+    python_path = sys.executable
+    in_venv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+    
     async def _run_install():
         typer.echo("═" * 60)
         typer.echo("  AEGIS FIRST-RUN INSTALLATION")
@@ -286,15 +293,20 @@ def install(
         typer.echo(f"  Root User: {username} ({display_name})")
         typer.echo(f"  Tenant: {tenant_name}")
         typer.echo(f"  Config: {config}")
+        typer.echo(f"  Python: {python_path}")
+        typer.echo(f"  Virtual Env: {venv_path if in_venv else 'NOT IN VENV'}")
+        typer.echo(f"  Platform: {sys.platform}")
         typer.echo("")
 
         # Step 1: Install optional dependencies
+        installed_deps = []
         if not skip_deps:
             typer.echo("[1/4] Checking optional dependencies...")
             if not install_optional_deps():
                 typer.echo("  [✗] Some optional dependencies failed (continuing anyway)")
             else:
                 typer.echo("  [✓] Optional dependencies installed")
+                installed_deps = ["fastapi", "uvicorn", "jinja2", "python-multipart", "mcp", "plotly"]
         else:
             typer.echo("[1/4] Skipping optional dependency installation")
 
@@ -365,12 +377,19 @@ def install(
         typer.echo("  Aegis is now running with:")
         typer.echo(f"    • Root user: {username}")
         typer.echo(f"    • Tenant: {tenant_name}")
+        if installed_deps:
+            typer.echo(f"    • Optional dependencies installed: {', '.join(installed_deps)}")
         typer.echo(f"    • Mission Control: http://localhost:8420")
         typer.echo("")
         typer.echo("  Next steps:")
         typer.echo("    • Open http://localhost:8420 for Mission Control")
         typer.echo("    • Run 'aegis chat' for CLI chat with TOrchestrator")
         typer.echo("    • Run 'aegis stop' to gracefully shutdown")
+        typer.echo("")
+        typer.echo("  Environment:")
+        typer.echo(f"    • Python: {python_path}")
+        typer.echo(f"    • Virtual Env: {venv_path if in_venv else 'NOT IN VENV'}")
+        typer.echo(f"    • Platform: {sys.platform}")
         typer.echo("")
         typer.echo("  Press Ctrl+C to stop the system")
 

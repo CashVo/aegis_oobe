@@ -5,6 +5,7 @@ Start the Aegis system via System Manager.
 """
 
 import asyncio
+import sys
 import typer
 from typing import Annotated
 
@@ -26,13 +27,23 @@ def start(
 
 ) -> None:
     """Start the Aegis system (System Manager bootstrap)."""
+    import os
+    
+    # Environment info
+    venv_path = sys.prefix
+    python_path = sys.executable
+    in_venv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+    
     typer.echo("═══════════════════════════════════════")
     typer.echo("  Project Aegis — Starting System")
     typer.echo("═══════════════════════════════════════")
-    typer.echo(f"  Config : {config}")
-    typer.echo(f"  Web UI : {'enabled' if web else 'disabled'}")
+    typer.echo(f"  Config       : {config}")
+    typer.echo(f"  Web UI       : {'enabled' if web else 'disabled'}")
     if web:
-        typer.echo(f"  Port   : {web_port}")
+        typer.echo(f"  Port         : {web_port}")
+    typer.echo(f"  Python       : {python_path}")
+    typer.echo(f"  Virtual Env  : {venv_path if in_venv else 'NOT IN VENV'}")
+    typer.echo(f"  Platform     : {sys.platform}")
     typer.echo("")
 
     from aegis.manager.system_manager import SystemManager

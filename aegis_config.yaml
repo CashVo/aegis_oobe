@@ -251,6 +251,7 @@ observer:
   retention_days: 30
   batch_size: 100
   flush_interval_seconds: 5
+  health_host: "0.0.0.0"
   health_port: 8421
 
 # Forge configuration
