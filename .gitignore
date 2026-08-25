@@ -31,9 +31,23 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Aegis: None tracking - these files and folders should not be checked into any repo
+# Aegis: Runtime data - these files and folders should not be checked into any repo
 aegis_data/
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Aegis: Skills - local development skills
+skills/
+
+# Hermes temp files
+.hermes-tmp*/
+
+# Aider
 .aider.*
 .aider*
+
+# Environment backups
 .env.bak.*
 .secrets_audit.*
