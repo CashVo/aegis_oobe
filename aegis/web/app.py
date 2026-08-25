@@ -19,7 +19,58 @@ logger = logging.getLogger(__name__)
 _WEB_DIR = Path(__file__).parent
 _TEMPLATES_DIR = _WEB_DIR / "templates"
 _STATIC_DIR = _WEB_DIR / "static"
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+# Include both the main templates dir, the redis_bus templates dir, and the core templates dir
+_REDIS_BUS_TEMPLATES_DIR = _WEB_DIR / "routes" / "redis_bus" / "templates"
+_CORE_TEMPLATES_DIR = _WEB_DIR / "core" / "templates"
+templates = Jinja2Templates(directory=[str(_TEMPLATES_DIR), str(_REDIS_BUS_TEMPLATES_DIR), str(_CORE_TEMPLATES_DIR)])
+
+# Register custom template filters
+def format_number_filter(value):
+    """Format number with comma separators."""
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):,.0f}"
+    except (ValueError, TypeError):
+        return str(value)
+
+def format_bytes_filter(bytes_val):
+    """Format bytes to human-readable format."""
+    if bytes_val is None:
+        return "—"
+    try:
+        bytes_val = float(bytes_val)
+        if bytes_val < 1024:
+            return f"{bytes_val} B"
+        elif bytes_val < 1024**2:
+            return f"{bytes_val / 1024:.1f} KB"
+        elif bytes_val < 1024**3:
+            return f"{bytes_val / 1024**2:.1f} MB"
+        else:
+            return f"{bytes_val / 1024**3:.1f} GB"
+    except (ValueError, TypeError):
+        return str(bytes_val)
+
+def format_duration_filter(ms):
+    """Format duration in milliseconds to human-readable format."""
+    if ms is None:
+        return "—"
+    try:
+        ms = float(ms)
+        if ms < 1000:
+            return f"{ms:.0f} ms"
+        elif ms < 60000:
+            return f"{ms / 1000:.1f} s"
+        elif ms < 3600000:
+            return f"{ms / 60000:.1f} m"
+        else:
+            return f"{ms / 3600000:.1f} h"
+    except (ValueError, TypeError):
+        return str(ms)
+
+templates.env.filters["format_number"] = format_number_filter
+templates.env.filters["format_bytes"] = format_bytes_filter
+templates.env.filters["format_duration"] = format_duration_filter
 
 
 @asynccontextmanager
