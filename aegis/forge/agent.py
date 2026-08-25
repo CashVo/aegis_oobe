@@ -40,6 +40,12 @@ class ForgeAgent(BaseAgent):
     subscriptions: list[str] = ["aegis:stream:forge"]
 
     def __init__(self, bus=None, config: dict = None):
+        # Initialize BaseAgent first
+        super().__init__(
+            agent_id="forge",
+            subscriptions=["aegis:stream:forge"],
+        )
+        
         self._bus = bus
         self._config = config or {}
         self._tool_registry = ToolRegistry()
