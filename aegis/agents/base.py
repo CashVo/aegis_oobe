@@ -79,6 +79,8 @@ class BaseAgent(ABC):
             target_agent="observer",
             message_type=MessageType.EVENT,
             action="observer.heartbeat",
+            tenant_id=getattr(self, 'tenant_id', 'default'),
+            user_id=getattr(self, 'user_id', 'root'),
             payload=event.model_dump(mode="json"),
         )
         

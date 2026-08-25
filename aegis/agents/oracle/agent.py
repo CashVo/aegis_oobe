@@ -108,6 +108,8 @@ class OracleAgent(BaseAgent):
 
         # Initialize providers (verify connectivity)
         await self.llm_registry.initialize_providers()
+        # Start heartbeat for this agent
+        await self.start_heartbeat()
 
         # Initialize cache storage
         await self.cache.initialize()

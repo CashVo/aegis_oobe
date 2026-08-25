@@ -94,6 +94,8 @@ class TOrchestrator(BaseAgent):
                 await self._bus_subscriber.subscribe(channel, self._on_bus_message)
         logger.info("TOrchestrator ready. Subscribed to: %s", self.subscriptions)
 
+        # Start heartbeat for this agent
+        await self.start_heartbeat()
     async def shutdown(self) -> None:
         """Graceful teardown — persist sessions, unsubscribe."""
         logger.info("TOrchestrator shutting down...")

@@ -110,6 +110,8 @@ class IdentityAgent(BaseAgent):
                 logger.info(f"Cleaned up legacy consumer group '{legacy_group}' on '{stream_name}'")
             except Exception as e:
                 logger.debug(f"Legacy group cleanup skipped (may not exist): {e}")
+        # Start heartbeat for this agent
+        await self.start_heartbeat()
 
         # Always create our own MessageSubscriber for our agent_id to ensure correct consumer groups
         if self._redis_conn is not None:

@@ -310,6 +310,8 @@ class WardenAgent(BaseAgent):
     async def startup(self) -> None:
         """
         Initialize the Warden agent.
+        # Start heartbeat for this agent
+        await self.start_heartbeat()
 
         Subscribes to the Warden stream and broadcasts readiness.
         """

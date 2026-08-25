@@ -8,8 +8,8 @@ Mission Control UI and `aegis status` CLI command.
 Uses aiohttp for minimal async HTTP serving.
 """
 
+import asyncio
 import json
-import socket
 from typing import Any, Callable, Dict, Optional
 
 from aiohttp import web
@@ -53,7 +53,7 @@ class HealthServer:
         self._site: Optional[web.TCPSite] = None
 
     async def start(self) -> None:
-        """Start the health HTTP server with automatic port conflict resolution."""
+        """Start the health HTTP server."""
         self._app = web.Application()
         self._app.router.add_get("/health", self._handle_health)
         self._app.router.add_get("/health/ready", self._handle_ready)
@@ -61,21 +61,8 @@ class HealthServer:
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
-        self._site = web.TCPSite(self._runner, self.host, self.port, reuse_address=True)
-        try:
-            await self._site.start()
-        except OSError as e:
-            if e.errno == 98:  # Address already in use
-                # Try to find an available port
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind((self.host, 0))
-                    free_port = s.getsockname()[1]
-                print(f"[WARNING] Port {self.port} in use, trying {free_port}")
-                self.port = free_port
-                self._site = web.TCPSite(self._runner, self.host, self.port, reuse_address=True)
-                await self._site.start()
-            else:
-                raise
+        self._site = web.TCPSite(self._runner, self.host, self.port)
+        await self._site.start()
 
     async def stop(self) -> None:
         """Stop the health HTTP server gracefully."""
