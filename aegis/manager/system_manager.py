@@ -331,7 +331,11 @@ class SystemManager:
                 port = getattr(self.client_config, "port", 6379)
                 db = getattr(self.client_config, "db", 0)
 
-            self.client_conn = aioredis.Redis(host=host, port=port, db=db, decode_responses=True)
+            self.client_conn = aioredis.Redis(
+                host=host, port=port, db=db, decode_responses=True,
+                socket_timeout=None,  # No timeout for blocking operations
+                socket_connect_timeout=5.0,
+            )
             pong = await self.client_conn.ping()
             if pong:
                 logger.info("[Redis] Connected to %s:%s (db=%s)", host, port, db)

@@ -132,7 +132,7 @@ class RedisConnectionManager:
             db=self._db,
             password=self._password,
             max_connections=self._max_connections,
-            socket_timeout=self._socket_timeout,
+            socket_timeout=None,  # No timeout for blocking operations
             socket_connect_timeout=self._socket_connect_timeout,
             retry_on_timeout=self._retry_on_timeout,
             decode_responses=self._decode_responses,

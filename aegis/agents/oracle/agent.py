@@ -70,6 +70,9 @@ class OracleAgent(BaseAgent):
         Args:
             config: Oracle configuration dict from aegis_config.yaml.
         """
+        # Call parent init for heartbeat and bus support
+        super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+
         self._config = config or {}
         oracle_cfg = self._config.get("oracle", {})
 
@@ -100,8 +103,7 @@ class OracleAgent(BaseAgent):
         logger.info("oracle.initialized", models=self.llm_registry.list_models())
 
     async def startup(self) -> None:
-        """
-        Agent initialization: subscribe to channels, verify providers.
+        """Agent initialization: subscribe to channels, verify providers.
         Implements: Part II §2.3 — BaseAgent.startup()
         """
         self._running = True
@@ -113,6 +115,21 @@ class OracleAgent(BaseAgent):
 
         # Initialize cache storage
         await self.cache.initialize()
+
+        # Create and start MessageSubscriber for this agent's stream
+        if self._redis_conn is not None:
+            from aegis.bus.subscriber import MessageSubscriber
+            self._bus_subscriber = MessageSubscriber(
+                redis_client=self._redis_conn,
+                agent_id=self.agent_id,
+                handler=self._on_bus_message,
+                subscribe_to_broadcast=False,
+            )
+            await self._bus_subscriber.start()
+            logger.info(f"Oracle created its own MessageSubscriber with agent_id={self.agent_id}")
+            logger.info(f"  Subscribed to stream: {self._bus_subscriber._stream}")
+            logger.info(f"  Consumer group: {self._bus_subscriber._group}")
+            logger.info(f"  Consumer: {self._bus_subscriber._consumer}")
 
         logger.info(
             "oracle.started",
@@ -128,11 +145,15 @@ class OracleAgent(BaseAgent):
         self._running = False
         await self.cache.flush()
         await self.llm_registry.shutdown_providers()
-        
+
         # Close ModelRouter if available
         if self.model_router:
             await self.model_router.close()
-        
+
+        # Stop the subscriber
+        if self._bus_subscriber:
+            await self._bus_subscriber.stop()
+
         logger.info("oracle.shutdown_complete")
 
     async def handle_message(self, message: AegisMessage) -> AegisMessage | None:
@@ -237,7 +258,7 @@ class OracleAgent(BaseAgent):
         # Check if we should use ModelRouter (tiered fallback) for this request
         # Use ModelRouter for OpenRouter models
         llm_def = self.llm_registry.select_model(request.llm_preference)
-        
+
         if llm_def.provider == "openrouter" and self.model_router:
             return await self._handle_query_via_model_router(request, message, llm_def)
 
@@ -295,7 +316,8 @@ class OracleAgent(BaseAgent):
         self.token_manager.record_usage(
             tenant_id=message.tenant_id,
             user_id=message.user_id,
-            tokens=result.get("tokens_used", {}),
+            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
+            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
         )
 
         return response
@@ -304,11 +326,8 @@ class OracleAgent(BaseAgent):
         self, request: OracleRequest, message: AegisMessage, llm_def
     ) -> OracleResponse:
         """
-        Handle QUERY action via work-tracker ModelRouter (tiered fallback).
-        This provides automatic fallback across free OpenRouter models.
+        Handle query via ModelRouter (tiered fallback for OpenRouter).
         """
-        from aegis.lib.work_tracker import CompletionRequest
-        
         # Assemble prompt
         system_prompt, user_prompt = self.prompt_engine.assemble(
             prompt=request.prompt,
@@ -316,7 +335,7 @@ class OracleAgent(BaseAgent):
             context_packet=request.context_packet,
         )
 
-        # Validate token budget (using selected model's context window)
+        # Validate token budget
         estimated_input = self.token_manager.estimate_tokens(
             system_prompt + user_prompt
         )
@@ -326,77 +345,59 @@ class OracleAgent(BaseAgent):
             context_window=llm_def.context_window,
         )
 
-        # Check cache
-        cache_key = self.cache.compute_key(request, llm_def.llm_id)
-        cached = await self.cache.get(cache_key)
-        if cached is not None:
-            return OracleResponse(
-                success=True,
-                content=cached["content"],
-                llm_used=cached["llm_used"],
-                tokens_used=cached.get("tokens_used", {}),
-                cached=True,
-            )
-
-        # Build messages for ModelRouter
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_prompt})
-
-        # Create completion request for ModelRouter
-        completion_request = CompletionRequest(
-            messages=messages,
-            model=llm_def.llm_id if llm_def.llm_id != "nvidia/nemotron-3-ultra-550b-a55b:free" else None,
+        # Execute via ModelRouter
+        result = await self.model_router.generate(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
-            session_id=message.correlation_id or message.message_id,
-            project="aegis",
-            agent="aegis",
-            metadata={
-                "source": "oracle",
-                "action": request.action.value,
-                "tenant_id": message.tenant_id,
-                "user_id": message.user_id,
-            },
         )
 
-        # Execute via ModelRouter (handles tiered fallback)
-        try:
-            router_response = await self.model_router.complete(completion_request)
-            
-            result = {
-                "content": router_response.content,
-                "tokens_used": {
-                    "prompt": router_response.prompt_tokens,
-                    "completion": router_response.completion_tokens,
-                    "total": router_response.total_tokens,
-                },
-                "model": router_response.model,
-                "finish_reason": router_response.finish_reason,
-            }
-
-        except Exception as e:
-            logger.error("oracle.model_router_failed", error=str(e))
-            raise ProviderError(f"ModelRouter failed: {e}") from e
-
-        # Cache the response
-        response = OracleResponse(
-            success=True,
-            content=result["content"],
-            llm_used=result["model"],
-            tokens_used=result.get("tokens_used", {}),
-        )
-        await self.cache.store(cache_key, response)
-
-        # Track token usage in Aegis token manager
+        # Track token usage
         self.token_manager.record_usage(
             tenant_id=message.tenant_id,
             user_id=message.user_id,
-            tokens=result.get("tokens_used", {}),
+            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
+            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
         )
 
-        return response
+        return OracleResponse(
+            success=True,
+            content=result["content"],
+            llm_used=result.get("model", "unknown"),
+            tokens_used=result.get("tokens_used", {}),
+        )
+
+    async def _handle_embed(
+        self, request: OracleRequest, message: AegisMessage
+    ) -> OracleResponse:
+        """
+        Handle an EMBED action.
+        Implements: Part VI §6.2 — OracleAction.EMBED
+        """
+        llm_def = self.llm_registry.select_model(request.llm_preference)
+        provider = self.llm_registry.get_provider(llm_def.provider)
+
+        result = await provider.embed(
+            llm_id=llm_def.llm_id,
+            texts=request.texts,
+        )
+
+        return OracleResponse(
+            success=True,
+            content=result["embeddings"],
+            llm_used=llm_def.llm_id,
+            tokens_used=result.get("tokens_used", {}),
+        )
+
+    async def _handle_classify(
+        self, request: OracleRequest, message: AegisMessage
+    ) -> OracleResponse:
+        """
+        Handle a CLASSIFY action.
+        Implements: Part VI §6.2 — OracleAction.CLASSIFY
+        """
+        return await self._handle_query(request, message)
 
     async def _handle_structured(
         self, request: OracleRequest, message: AegisMessage
@@ -408,7 +409,7 @@ class OracleAgent(BaseAgent):
         llm_def = self.llm_registry.select_model(
             request.llm_preference, require_json=True
         )
-        
+
         # Use ModelRouter for OpenRouter models
         if llm_def.provider == "openrouter" and self.model_router:
             return await self._handle_structured_via_model_router(request, message, llm_def)
@@ -437,114 +438,12 @@ class OracleAgent(BaseAgent):
             user_prompt=user_prompt,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
-            response_format="json",
         )
-
-        # Attempt to parse JSON content
-        import json
-        content = result["content"]
-        try:
-            if isinstance(content, str):
-                content = json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("oracle.structured_output_not_json", raw=content[:200])
 
         response = OracleResponse(
             success=True,
-            content=content,
+            content=result["content"],
             llm_used=llm_def.llm_id,
-            tokens_used=result.get("tokens_used", {}),
-        )
-
-        self.token_manager.record_usage(
-            tenant_id=message.tenant_id,
-            user_id=message.user_id,
-            tokens=result.get("tokens_used", {}),
-        )
-
-        return response
-
-    async def _handle_structured_via_model_router(
-        self, request: OracleRequest, message: AegisMessage, llm_def
-    ) -> OracleResponse:
-        """
-        Handle STRUCTURED action via work-tracker ModelRouter (tiered fallback).
-        """
-        from aegis.lib.work_tracker import CompletionRequest
-        
-        # Assemble prompt
-        system_prompt, user_prompt = self.prompt_engine.assemble(
-            prompt=request.prompt,
-            system_prompt=request.system_prompt,
-            context_packet=request.context_packet,
-            force_json_instruction=True,
-        )
-
-        # Validate token budget
-        estimated_input = self.token_manager.estimate_tokens(
-            system_prompt + user_prompt
-        )
-        self.token_manager.validate_budget(
-            estimated_input=estimated_input,
-            max_output=request.max_tokens,
-            context_window=llm_def.context_window,
-        )
-
-        # Build messages for ModelRouter
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_prompt})
-
-        # Create completion request for ModelRouter
-        completion_request = CompletionRequest(
-            messages=messages,
-            model=llm_def.llm_id if llm_def.llm_id != "nvidia/nemotron-3-ultra-550b-a55b:free" else None,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            session_id=message.correlation_id or message.message_id,
-            project="aegis",
-            agent="aegis",
-            metadata={
-                "source": "oracle",
-                "action": request.action.value,
-                "tenant_id": message.tenant_id,
-                "user_id": message.user_id,
-            },
-        )
-
-        # Execute via ModelRouter
-        try:
-            router_response = await self.model_router.complete(completion_request)
-            
-            result = {
-                "content": router_response.content,
-                "tokens_used": {
-                    "prompt": router_response.prompt_tokens,
-                    "completion": router_response.completion_tokens,
-                    "total": router_response.total_tokens,
-                },
-                "model": router_response.model,
-                "finish_reason": router_response.finish_reason,
-            }
-
-        except Exception as e:
-            logger.error("oracle.model_router_failed", error=str(e))
-            raise ProviderError(f"ModelRouter failed: {e}") from e
-
-        # Parse JSON content
-        import json
-        content = result["content"]
-        try:
-            if isinstance(content, str):
-                content = json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("oracle.structured_output_not_json", raw=content[:200])
-
-        response = OracleResponse(
-            success=True,
-            content=content,
-            llm_used=result["model"],
             tokens_used=result.get("tokens_used", {}),
         )
 
@@ -552,54 +451,21 @@ class OracleAgent(BaseAgent):
         self.token_manager.record_usage(
             tenant_id=message.tenant_id,
             user_id=message.user_id,
-            tokens=result.get("tokens_used", {}),
+            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
+            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
         )
 
         return response
 
-    async def _handle_embed(
-        self, request: OracleRequest, message: AegisMessage
+    async def _handle_structured_via_model_router(
+        self, request: OracleRequest, message: AegisMessage, llm_def
     ) -> OracleResponse:
-        """
-        Handle an EMBED action (embedding generation).
-        Implements: Part VI §6.2 — OracleAction.EMBED
-        """
-        llm_def = self.llm_registry.select_embedding_model(
-            request.llm_preference
-        )
-        provider = self.llm_registry.get_provider(llm_def.provider)
-
-        result = await provider.embed(
-            llm_id=llm_def.llm_id,
-            texts=[request.prompt],
-        )
-
-        return OracleResponse(
-            success=True,
-            content=result["embeddings"],
-            llm_used=llm_def.llm_id,
-            tokens_used=result.get("tokens_used", {}),
-        )
-
-    async def _handle_classify(
-        self, request: OracleRequest, message: AegisMessage
-    ) -> OracleResponse:
-        """
-        Handle a CLASSIFY action (classification via LLM).
-        Implements: Part VI §6.2 — OracleAction.CLASSIFY
-
-        Classification is a specialized QUERY that uses the classification
-        prompt template and enforces structured JSON output.
-        """
-        llm_def = self.llm_registry.select_model(
-            request.llm_preference, require_json=True
-        )
-        provider = self.llm_registry.get_provider(llm_def.provider)
-
-        system_prompt, user_prompt = self.prompt_engine.assemble_classification(
+        """Handle STRUCTURED via ModelRouter (OpenRouter)."""
+        system_prompt, user_prompt = self.prompt_engine.assemble(
             prompt=request.prompt,
             system_prompt=request.system_prompt,
             context_packet=request.context_packet,
+            force_json_instruction=True,
         )
 
         estimated_input = self.token_manager.estimate_tokens(
@@ -611,44 +477,34 @@ class OracleAgent(BaseAgent):
             context_window=llm_def.context_window,
         )
 
-        result = await provider.generate(
-            llm_id=llm_def.llm_id,
+        result = await self.model_router.generate(
+            prompt=user_prompt,
             system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=0.2,  # Low temp for classification
+            temperature=request.temperature,
             max_tokens=request.max_tokens,
-            response_format="json",
-        )
-
-        import json
-        content = result["content"]
-        try:
-            if isinstance(content, str):
-                content = json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("oracle.classify_output_not_json", raw=content[:200])
-
-        response = OracleResponse(
-            success=True,
-            content=content,
-            llm_used=llm_def.llm_id,
-            tokens_used=result.get("tokens_used", {}),
+            response_format={"type": "json_object"},
         )
 
         self.token_manager.record_usage(
             tenant_id=message.tenant_id,
             user_id=message.user_id,
-            tokens=result.get("tokens_used", {}),
+            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
+            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
         )
 
-        return response
+        return OracleResponse(
+            success=True,
+            content=result["content"],
+            llm_used=result.get("model", "unknown"),
+            tokens_used=result.get("tokens_used", {}),
+        )
 
-    # ── Message Builders ─────────────────────────────────────────────
+    # ── Response Building ────────────────────────────────────────────
 
     def _build_response_message(
         self, original: AegisMessage, response: OracleResponse
     ) -> AegisMessage:
-        """Build a response AegisMessage envelope from an OracleResponse."""
+        """Build an AegisMessage envelope for the OracleResponse."""
         return AegisMessage(
             correlation_id=original.correlation_id or original.message_id,
             source_agent=self.agent_id,
@@ -656,23 +512,15 @@ class OracleAgent(BaseAgent):
             message_type=MessageType.RESPONSE,
             tenant_id=original.tenant_id,
             user_id=original.user_id,
-            action="oracle.response",
+            action=f"{self.agent_id}.response",
             payload=response.model_dump(),
-            priority=original.priority,
-            metadata={"original_action": original.action},
+            priority=Priority.NORMAL,
         )
 
     def _build_error_message(
         self, original: AegisMessage, error: str, latency_ms: float
     ) -> AegisMessage:
-        """Build an error AegisMessage envelope."""
-        response = OracleResponse(
-            success=False,
-            content=error,
-            llm_used="",
-            tokens_used={"prompt": 0, "completion": 0, "total": 0},
-            latency_ms=latency_ms,
-        )
+        """Build an error response message."""
         return AegisMessage(
             correlation_id=original.correlation_id or original.message_id,
             source_agent=self.agent_id,
@@ -680,8 +528,17 @@ class OracleAgent(BaseAgent):
             message_type=MessageType.ERROR,
             tenant_id=original.tenant_id,
             user_id=original.user_id,
-            action="oracle.error",
-            payload=response.model_dump(),
+            action=f"{self.agent_id}.error",
+            payload={"error": error},
             priority=Priority.HIGH,
-            metadata={"original_action": original.action, "error": error},
         )
+
+    async def _on_bus_message(self, message: AegisMessage) -> None:
+        """Callback for messages received on our bus stream."""
+        try:
+            response = await self.handle_message(message)
+            if response and self._bus_publisher:
+                target_stream = f"aegis:stream:{response.target_agent}"
+                await self._bus_publisher.publish_to_stream(target_stream, response)
+        except Exception as e:
+            logger.error("Error processing bus message: %s", e, exc_info=True)

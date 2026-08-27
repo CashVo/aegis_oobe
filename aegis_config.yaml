@@ -17,7 +17,7 @@ redis:
 
 # API server configuration (for Janus agent, CHUNK-006)
 api:
-  host: "127.0.0.1"
+  host: "0.0.0.0"
   port: 8000
 
 # Default timeout for agent request-response cycles.
@@ -32,7 +32,7 @@ oracle:
   max_concurrent_requests: 8
 
   # Default model preference (must match a key in 'models' below)
-  default_model: "llama3.2"
+  default_model: "nemotron-3-ultra-550b"
 
   # ── Provider Configuration ──
   providers:
@@ -96,6 +96,16 @@ oracle:
       max_output_tokens: 0
 
     # OpenRouter free tier models (via OpenRouterProvider with tiered fallback)
+    nemotron-3-ultra-550b:
+      llm_id: "nvidia/nemotron-3-ultra-550b-a55b:free"
+      provider: "openrouter"
+      display_name: "Nemotron 3 Ultra 550B (OpenRouter Free)"
+      context_window: 128000
+      preference_tags: ["cloud", "capable", "complex", "default"]
+      supports_json_mode: true
+      supports_embeddings: false
+      max_output_tokens: 4096
+
     nemotron-3-ultra:
       llm_id: "nvidia/nemotron-3-ultra:free"
       provider: "openrouter"
@@ -116,22 +126,22 @@ oracle:
       supports_embeddings: false
       max_output_tokens: 4096
 
-    gemma-4-26b:
-      llm_id: "google/gemma-4-26b-a4b:free"
+    gemma-4-31b-it:
+      llm_id: "google/gemma-4-31b-it:free"
       provider: "openrouter"
-      display_name: "Gemma 4 26B A4B (OpenRouter Free)"
+      display_name: "Gemma 4 31B Instruct (OpenRouter Free)"
       context_window: 8192
-      preference_tags: ["cloud", "capable", "complex"]
+      preference_tags: ["cloud", "capable", "complex", "gemini"]
       supports_json_mode: true
       supports_embeddings: false
       max_output_tokens: 4096
 
-    gemma-4-31b:
-      llm_id: "google/gemma-4-31b:free"
+    gemma-2-27b-it:
+      llm_id: "google/gemma-2-27b-it:free"
       provider: "openrouter"
-      display_name: "Gemma 4 31B (OpenRouter Free)"
+      display_name: "Gemma 2 27B Instruct (OpenRouter Free)"
       context_window: 8192
-      preference_tags: ["cloud", "capable", "complex"]
+      preference_tags: ["cloud", "fast", "gemini"]
       supports_json_mode: true
       supports_embeddings: false
       max_output_tokens: 4096
@@ -208,6 +218,9 @@ web:
   port: 8420
   cors_origins:
     - "http://localhost:8420"
+    - "http://207.211.172.66:8420"
+    - "http://127.0.0.1:8420"
+    - "http://192.168.1.1:8420"
     - "http://127.0.0.1:8420"
 
 mcp:

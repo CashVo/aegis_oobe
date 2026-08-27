@@ -13,6 +13,7 @@ Publishes to: aegis:stream:broadcast (memory events)
 import logging
 from typing import Any, Dict, Optional
 
+from aegis.agents.base import BaseAgent
 from aegis.agents.lexicon.context_router import ContextRouter
 from aegis.agents.lexicon.governor import MemoryGovernor
 from aegis.agents.lexicon.storage import ensure_user_storage
@@ -35,7 +36,7 @@ from aegis.schemas.lexicon import (
 logger = logging.getLogger(__name__)
 
 
-class LexiconAgent:
+class LexiconAgent(BaseAgent):
     """
     The Lexicon Memory Control Plane agent.
 
@@ -65,6 +66,9 @@ class LexiconAgent:
             redis_client: Async Redis client for L5 scratchpad and bus communication.
             base_dir: Override for the base data directory.
         """
+        # Call parent init for heartbeat and bus support
+        super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+        
         self.client = redis_client
         self._base_dir = base_dir
         self._user_contexts: Dict[str, Dict[str, Any]] = {}

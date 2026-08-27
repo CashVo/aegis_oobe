@@ -66,6 +66,9 @@ class WardenAgent(BaseAgent):
             user_permission_resolver: Callable to resolve user permissions.
                                      Signature: (tenant_id, user_id) -> Set[str]
         """
+        # Call parent init for heartbeat and bus support
+        super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+        
         self._config = config or {}
 
         # Initialize subsystems

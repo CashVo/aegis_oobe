@@ -61,6 +61,9 @@ class IdentityAgent(BaseAgent):
             bus_subscriber: Optional MessageSubscriber for subscribing to streams
             store: Optional pre-created IdentityStore instance. If not provided, one will be created from config.
         """
+        # Call parent init for heartbeat and bus support
+        super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+        
         self._config = config or {}
         self._bus_publisher = bus_publisher
         self._bus_subscriber = bus_subscriber

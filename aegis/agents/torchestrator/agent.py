@@ -71,6 +71,9 @@ class TOrchestrator(BaseAgent):
             redis_client: Redis client for session persistence.
             config: Optional configuration overrides.
         """
+        # Call parent init for heartbeat and bus support
+        super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+        
         self._config = config or {}
         self._intent_parser = IntentParser()
         self._decomposer = TaskDecomposer()
@@ -88,8 +91,36 @@ class TOrchestrator(BaseAgent):
     async def startup(self) -> None:
         """Agent initialization — subscribe to channels, load config."""
         logger.info("TOrchestrator starting up...")
-        # Subscribe to our stream if bus is available
-        if self._bus_subscriber:
+        
+        # Create our own MessageSubscriber if we have a Redis connection
+        if self._redis_conn is not None:
+            from aegis.bus.subscriber import MessageSubscriber
+            self._bus_subscriber = MessageSubscriber(
+                redis_client=self._redis_conn,
+                agent_id=self.agent_id,
+                handler=self._on_bus_message,
+                subscribe_to_broadcast=False,
+            )
+            # Start the subscriber FIRST (it subscribes to our main stream)
+            await self._bus_subscriber.start()
+            logger.info(f"TOrchestrator created its own MessageSubscriber with agent_id={self.agent_id}")
+            logger.info(f"  Subscribed to stream: {self._bus_subscriber._stream}")
+            logger.info(f"  Consumer group: {self._bus_subscriber._group}")
+            logger.info(f"  Consumer: {self._bus_subscriber._consumer}")
+
+            # Now subscribe to additional channels (after start so _running is True)
+            # Skip the main stream since we're already subscribed via the subscriber
+            main_stream = self._bus_subscriber._stream
+            if self._bus_subscriber:
+                for channel in self.subscriptions:
+                    if channel == main_stream:
+                        logger.debug(f"Skipping subscription to main stream '{channel}' (already subscribed)")
+                        continue
+                    await self._bus_subscriber.subscribe(channel, self._on_bus_message)
+                logger.info(f"TOrchestrator subscribed to additional channels: {[c for c in self.subscriptions if c != main_stream]}")
+        
+        # Subscribe to our stream if bus is available (fallback for backward compat)
+        elif self._bus_subscriber:
             for channel in self.subscriptions:
                 await self._bus_subscriber.subscribe(channel, self._on_bus_message)
         logger.info("TOrchestrator ready. Subscribed to: %s", self.subscriptions)
@@ -150,14 +181,14 @@ class TOrchestrator(BaseAgent):
                 )
         return None
 
-    async def _on_bus_message(self, message_data: Dict[str, Any]) -> None:
+    async def _on_bus_message(self, message: AegisMessage) -> None:
         """Callback for messages received on our bus stream."""
         try:
-            message = AegisMessage(**message_data)
             response = await self.handle_message(message)
             if response and self._bus_publisher:
-                target_stream = f"aegis:stream:{response.target_agent}"
-                await self._bus_publisher.publish(target_stream, response.model_dump())
+                # Use response_channel from original message payload if present
+                target_stream = message.payload.get("response_channel", f"aegis:stream:{response.target_agent}")
+                await self._bus_publisher.publish_to_stream(target_stream, response)
         except Exception as e:
             logger.error("Error processing bus message: %s", e, exc_info=True)
 

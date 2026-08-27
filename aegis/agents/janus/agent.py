@@ -61,6 +61,9 @@ class JanusAgent(BaseAgent):
             data_dir: Directory for policy database storage.
             bus: Reference to the Redis message bus (injected at startup).
         """
+        # Call parent init for heartbeat and bus support
+        super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+        
         self._data_dir = Path(data_dir)
         self._db_path = self._data_dir / "governance" / "policies.db"
         self._store: Optional[PolicyStore] = None
