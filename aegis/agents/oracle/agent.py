@@ -63,18 +63,41 @@ class OracleAgent(BaseAgent):
     agent_id: str = "oracle"
     subscriptions: list[str] = ["aegis:stream:oracle"]
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(self, config: dict | None = None, redis_conn=None, bus_publisher=None, bus_subscriber=None) -> None:
         """
         Initialize Oracle with all subsystems.
 
         Args:
-            config: Oracle configuration dict from aegis_config.yaml.
+            config: Oracle configuration dict (can be either the full config with "oracle" key,
+                   or already the oracle section from aegis_config.yaml).
+            redis_conn: Redis connection for session persistence.
+            bus_publisher: MessagePublisher for sending responses.
+            bus_subscriber: MessageSubscriber for receiving messages.
         """
         # Call parent init for heartbeat and bus support
         super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
 
         self._config = config or {}
-        oracle_cfg = self._config.get("oracle", {})
+        
+        # Config can be either the full config with "oracle" key, or already the oracle section,
+        # or an AegisConfig pydantic model. Handle all cases.
+        if hasattr(self._config, "model_dump"):
+            # It's a pydantic model - convert to dict
+            config_dict = self._config.model_dump()
+        elif isinstance(self._config, dict):
+            config_dict = self._config
+        else:
+            config_dict = {}
+        
+        if "oracle" in config_dict:
+            oracle_cfg = config_dict["oracle"]
+        else:
+            oracle_cfg = config_dict if config_dict else {}
+
+        # Store redis connection for startup() to use
+        self._redis_conn = redis_conn
+        self._bus_publisher = bus_publisher
+        self._bus_subscriber = bus_subscriber
 
         # Initialize subsystems
         self.llm_registry = LLMRegistry(oracle_cfg)
@@ -346,26 +369,40 @@ class OracleAgent(BaseAgent):
         )
 
         # Execute via ModelRouter
-        result = await self.model_router.generate(
-            prompt=user_prompt,
-            system_prompt=system_prompt,
+        from work_tracker.model_router import CompletionRequest
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+        
+        completion_request = CompletionRequest(
+            messages=messages,
+            model=None,  # Auto-select from tier chain
             temperature=request.temperature,
             max_tokens=request.max_tokens,
+            stream=False,
         )
-
+        
+        response = await self.model_router.complete(completion_request)
+        
         # Track token usage
         self.token_manager.record_usage(
             tenant_id=message.tenant_id,
             user_id=message.user_id,
-            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
-            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
+            input_tokens=response.prompt_tokens,
+            output_tokens=response.completion_tokens,
         )
-
+        
         return OracleResponse(
             success=True,
-            content=result["content"],
-            llm_used=result.get("model", "unknown"),
-            tokens_used=result.get("tokens_used", {}),
+            content=response.content,
+            llm_used=response.model,
+            tokens_used={
+                "prompt_tokens": response.prompt_tokens,
+                "completion_tokens": response.completion_tokens,
+                "total_tokens": response.total_tokens,
+            },
         )
 
     async def _handle_embed(
@@ -477,26 +514,39 @@ class OracleAgent(BaseAgent):
             context_window=llm_def.context_window,
         )
 
-        result = await self.model_router.generate(
-            prompt=user_prompt,
-            system_prompt=system_prompt,
+        from work_tracker.model_router import CompletionRequest
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+        
+        completion_request = CompletionRequest(
+            messages=messages,
+            model=None,  # Auto-select from tier chain
             temperature=request.temperature,
             max_tokens=request.max_tokens,
-            response_format={"type": "json_object"},
+            stream=False,
         )
+        
+        response = await self.model_router.complete(completion_request)
 
         self.token_manager.record_usage(
             tenant_id=message.tenant_id,
             user_id=message.user_id,
-            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
-            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
+            input_tokens=response.prompt_tokens,
+            output_tokens=response.completion_tokens,
         )
 
         return OracleResponse(
             success=True,
-            content=result["content"],
-            llm_used=result.get("model", "unknown"),
-            tokens_used=result.get("tokens_used", {}),
+            content=response.content,
+            llm_used=response.model,
+            tokens_used={
+                "prompt_tokens": response.prompt_tokens,
+                "completion_tokens": response.completion_tokens,
+                "total_tokens": response.total_tokens,
+            },
         )
 
     # ── Response Building ────────────────────────────────────────────
@@ -538,7 +588,8 @@ class OracleAgent(BaseAgent):
         try:
             response = await self.handle_message(message)
             if response and self._bus_publisher:
-                target_stream = f"aegis:stream:{response.target_agent}"
+                # Use response_channel from original message payload if present
+                target_stream = message.payload.get("response_channel", f"aegis:stream:{response.target_agent}")
                 await self._bus_publisher.publish_to_stream(target_stream, response)
         except Exception as e:
             logger.error("Error processing bus message: %s", e, exc_info=True)

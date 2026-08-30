@@ -60,6 +60,7 @@ class TOrchestrator(BaseAgent):
         bus_publisher=None,
         bus_subscriber=None,
         redis_client=None,
+        redis_conn=None,
         config: Optional[Dict[str, Any]] = None
     ):
         """
@@ -68,11 +69,18 @@ class TOrchestrator(BaseAgent):
         Args:
             bus_publisher: Redis bus publisher (from CHUNK-002).
             bus_subscriber: Redis bus subscriber for incoming messages.
-            redis_client: Redis client for session persistence.
+            redis_client: Redis client for session persistence (primary param).
+            redis_conn: Alternative param name for redis_client (compat).
             config: Optional configuration overrides.
         """
         # Call parent init for heartbeat and bus support
         super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
+        
+        # Support both redis_conn and redis_client for compatibility
+        redis_client = redis_client or redis_conn
+        
+        # Store redis connection for startup() to use
+        self._redis_conn = redis_client
         
         self._config = config or {}
         self._intent_parser = IntentParser()
@@ -157,6 +165,11 @@ class TOrchestrator(BaseAgent):
                     metadata=message.metadata,
                 )
                 response = await self.process_request(request)
+                # Include the original response_channel in the response payload so _on_bus_message can route it back
+                original_response_channel = message.payload.get("response_channel")
+                payload = response.model_dump()
+                if original_response_channel:
+                    payload["response_channel"] = original_response_channel
                 return AegisMessage(
                     correlation_id=message.correlation_id,
                     source_agent=self.agent_id,
@@ -165,7 +178,7 @@ class TOrchestrator(BaseAgent):
                     tenant_id=message.tenant_id,
                     user_id=message.user_id,
                     action=f"{self.agent_id}.response",
-                    payload=response.model_dump(),
+                    payload=payload,
                 )
             except Exception as e:
                 logger.error("Error handling request: %s", e, exc_info=True)
@@ -186,8 +199,8 @@ class TOrchestrator(BaseAgent):
         try:
             response = await self.handle_message(message)
             if response and self._bus_publisher:
-                # Use response_channel from original message payload if present
-                target_stream = message.payload.get("response_channel", f"aegis:stream:{response.target_agent}")
+                # Use response_channel from original message payload or metadata if present
+                target_stream = message.payload.get("response_channel") or message.metadata.get("response_channel") or f"aegis:stream:{response.target_agent}"
                 await self._bus_publisher.publish_to_stream(target_stream, response)
         except Exception as e:
             logger.error("Error processing bus message: %s", e, exc_info=True)

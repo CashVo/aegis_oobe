@@ -132,7 +132,9 @@ class TokenManager:
         self,
         tenant_id: str,
         user_id: str,
-        tokens: dict,
+        tokens: dict | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
     ) -> None:
         """
         Record token usage for a tenant/user pair.
@@ -140,12 +142,22 @@ class TokenManager:
         Args:
             tenant_id: The tenant identifier.
             user_id: The user identifier.
-            tokens: Dict with "prompt", "completion", "total" keys.
+            tokens: Dict with "prompt", "completion", "total" keys (legacy format).
+            input_tokens: Number of input/prompt tokens (new format).
+            output_tokens: Number of output/completion tokens (new format).
         """
         key = (tenant_id, user_id)
-        self._usage[key]["prompt"] += tokens.get("prompt", 0)
-        self._usage[key]["completion"] += tokens.get("completion", 0)
-        self._usage[key]["total"] += tokens.get("total", 0)
+        
+        if tokens:
+            # Legacy format: tokens dict with prompt/completion/total
+            self._usage[key]["prompt"] += tokens.get("prompt", 0)
+            self._usage[key]["completion"] += tokens.get("completion", 0)
+            self._usage[key]["total"] += tokens.get("total", 0)
+        else:
+            # New format: input_tokens and output_tokens
+            self._usage[key]["prompt"] += input_tokens
+            self._usage[key]["completion"] += output_tokens
+            self._usage[key]["total"] += input_tokens + output_tokens
 
         logger.debug(
             "token_manager.usage_recorded",

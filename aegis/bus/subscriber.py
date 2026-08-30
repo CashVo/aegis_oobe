@@ -288,8 +288,27 @@ class MessageSubscriber:
                 )
 
         # Main read loop
+        last_claim_check = asyncio.get_event_loop().time()
+        CLAIM_CHECK_INTERVAL = 30.0  # Check for pending messages every 30 seconds
+
         while self._running:
             try:
+                # Periodically check for and claim pending messages
+                now = asyncio.get_event_loop().time()
+                if now - last_claim_check >= CLAIM_CHECK_INTERVAL:
+                    logger.debug(f"Periodic pending message check on '{stream}'")
+                    pending = await self._claim_pending_messages(stream, group, consumer)
+                    for msg in pending:
+                        try:
+                            await handler(msg)
+                        except Exception as e:
+                            logger.error(
+                                f"Handler error processing reclaimed pending message "
+                                f"{msg.message_id}: {e}",
+                                exc_info=True,
+                            )
+                    last_claim_check = now
+
                 # XREADGROUP: read new messages (id=">")
                 responses = await self.client.xreadgroup(
                     groupname=group,

@@ -414,7 +414,7 @@ class SystemManager:
 
         try:
             # Instantiate the agent
-            # Agents may accept config, redis_conn, bus_publisher, bus_subscriber, etc.
+            # Agents may accept config, redis_conn/redis_client, bus_publisher, bus_subscriber, etc.
             agent_config = self._config.get(entry.config_key, {}) if entry.config_key else {}
             try:
                 instance = cls(

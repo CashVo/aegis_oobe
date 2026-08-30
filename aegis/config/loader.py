@@ -1,9 +1,11 @@
 # File: aegis/config/loader.py
 # Purpose: Handles loading config from YAML and merging with ENV overrides.
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, ValidationError
@@ -19,6 +21,39 @@ class APIConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
 
+class OracleModelConfig(BaseModel):
+    """Configuration for an Oracle model."""
+    llm_id: str
+    provider: str
+    display_name: str
+    context_window: int
+    preference_tags: List[str] = []
+    supports_json_mode: bool = False
+    supports_embeddings: bool = False
+    max_output_tokens: int = 4096
+
+class OracleProviderConfig(BaseModel):
+    """Configuration for an Oracle provider."""
+    provider_type: str
+    base_url: str
+    enabled: bool = True
+    timeout_seconds: int = 60
+    max_concurrent: int = 4
+    max_retries: int = 3
+    api_key_env: Optional[str] = None
+    default_model: Optional[str] = None
+
+class OracleConfig(BaseModel):
+    """Configuration for the Oracle LLM Gateway."""
+    max_concurrent_requests: int = 8
+    default_model: str = "nemotron-3-ultra-550b"
+    providers: Dict[str, OracleProviderConfig] = {}
+    models: Dict[str, OracleModelConfig] = {}
+    cache: Dict[str, Any] = {}
+    rate_limit: Dict[str, Any] = {}
+    token_budget: Dict[str, Any] = {}
+    templates: Dict[str, Any] = {}
+
 class AegisConfig(BaseModel):
     """Typed configuration model for the entire Aegis system."""
     project_name: str = "aegis"
@@ -28,6 +63,7 @@ class AegisConfig(BaseModel):
     redis: RedisConfig = RedisConfig()
     api: APIConfig = APIConfig()
     agent_timeout_s: int = 30
+    oracle: OracleConfig = OracleConfig()
 
 def _load_env_vars(prefix: str) -> dict[str, Any]:
     """Loads and parses environment variables with a specific prefix."""

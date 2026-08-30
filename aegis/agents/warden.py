@@ -54,6 +54,9 @@ class WardenAgent(BaseAgent):
         self,
         config: Optional[Dict[str, Any]] = None,
         user_permission_resolver: Optional[Callable[[str, str], Set[str]]] = None,
+        redis_conn=None,
+        bus_publisher=None,
+        bus_subscriber=None,
     ):
         """
         Initialize the Warden agent.
@@ -65,11 +68,17 @@ class WardenAgent(BaseAgent):
                 - custom_roles: Additional role definitions
             user_permission_resolver: Callable to resolve user permissions.
                                      Signature: (tenant_id, user_id) -> Set[str]
+            redis_conn: Redis connection for session persistence.
+            bus_publisher: MessagePublisher for sending responses.
+            bus_subscriber: MessageSubscriber for receiving messages.
         """
         # Call parent init for heartbeat and bus support
         super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
         
         self._config = config or {}
+        self._redis_conn = redis_conn
+        self._bus_publisher = bus_publisher
+        self._bus_subscriber = bus_subscriber
 
         # Initialize subsystems
         self._permission_model = PermissionModel(
@@ -81,6 +90,12 @@ class WardenAgent(BaseAgent):
         self._bypass_manager = BypassManager(
             max_ttl_seconds=self._config.get("bypass", {}).get("max_ttl_seconds", 300),
         )
+        
+        # Create a permission resolver that defaults to 'root' role for 'root' user
+        # and 'member' role for others, if no custom resolver provided
+        if user_permission_resolver is None:
+            user_permission_resolver = self._default_permission_resolver
+        
         self._interceptor = MessageInterceptor(
             permission_model=self._permission_model,
             allowlist_engine=self._allowlist_engine,
@@ -89,6 +104,18 @@ class WardenAgent(BaseAgent):
         )
 
         logger.info("WardenAgent initialized.")
+
+    def _default_permission_resolver(self, tenant_id: str, user_id: str) -> Set[str]:
+        """
+        Default permission resolver based on user_id.
+        
+        - 'root' user gets 'root' role (wildcard permission *)
+        - Other users get 'member' role permissions
+        """
+        if user_id == "root":
+            return {"*"}  # Wildcard - all permissions
+        else:
+            return self._permission_model.get_role_permissions("member")
 
     @property
     def permission_model(self) -> PermissionModel:
@@ -180,8 +207,10 @@ class WardenAgent(BaseAgent):
     async def _handle_authorize(self, message: AegisMessage) -> WardenResponse:
         """Handle an authorization request."""
         payload = message.payload
+        # Support both "action" and "requested_action" for backward compatibility
+        action = payload.get("action") or payload.get("requested_action", "")
         request = WardenRequest(
-            action=payload.get("action", ""),
+            action=action,
             resource=payload.get("resource", ""),
             tenant_id=message.tenant_id,
             user_id=message.user_id,
@@ -313,17 +342,42 @@ class WardenAgent(BaseAgent):
     async def startup(self) -> None:
         """
         Initialize the Warden agent.
-        # Start heartbeat for this agent
-        await self.start_heartbeat()
-
-        Subscribes to the Warden stream and broadcasts readiness.
+        Subscribe to the Warden stream and start heartbeat.
         """
         logger.info(
             "Warden agent starting up",
             extra={"subscriptions": self.subscriptions},
         )
-        # In full implementation: subscribe to bus channels
+
+        # Create and start MessageSubscriber for this agent's stream
+        if self._redis_conn is not None:
+            from aegis.bus.subscriber import MessageSubscriber
+            self._bus_subscriber = MessageSubscriber(
+                redis_client=self._redis_conn,
+                agent_id=self.agent_id,
+                handler=self._on_bus_message,
+                subscribe_to_broadcast=False,
+            )
+            await self._bus_subscriber.start()
+            logger.info(f"Warden created its own MessageSubscriber with agent_id={self.agent_id}")
+            logger.info(f"  Subscribed to stream: {self._bus_subscriber._stream}")
+            logger.info(f"  Consumer group: {self._bus_subscriber._group}")
+            logger.info(f"  Consumer: {self._bus_subscriber._consumer}")
+
+        # Start heartbeat for this agent
+        await self.start_heartbeat()
         logger.info("Warden agent ready. Security enforcement active.")
+
+    async def _on_bus_message(self, message: AegisMessage) -> None:
+        """Callback for messages received on our bus stream."""
+        try:
+            response = await self.handle_message(message)
+            if response and self._bus_publisher:
+                # Use response_channel from original message payload if present
+                target_stream = message.payload.get("response_channel", f"aegis:stream:{response.target_agent}")
+                await self._bus_publisher.publish_to_stream(target_stream, response)
+        except Exception as e:
+            logger.error("Error processing bus message: %s", e, exc_info=True)
 
     async def shutdown(self) -> None:
         """
