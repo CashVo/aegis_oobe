@@ -326,8 +326,9 @@ class WardenAgent(BaseAgent):
         self, original: AegisMessage, warden_response: WardenResponse
     ) -> AegisMessage:
         """Build an AegisMessage response from a WardenResponse."""
+        # Use original.correlation_id so the caller can match the response
         return AegisMessage(
-            correlation_id=original.message_id,
+            correlation_id=original.correlation_id,
             source_agent=self.agent_id,
             target_agent=original.source_agent,
             message_type=MessageType.RESPONSE,

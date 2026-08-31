@@ -110,7 +110,8 @@ class MessageRouter:
                 action=step.action,
                 payload=payload,
                 priority=Priority.NORMAL,
-                ttl_seconds=int(timeout),
+                # Use a longer TTL for Oracle calls (default 120s for Oracle, 60s for others)
+                ttl_seconds=int(timeout * 2) if step.target_agent == "oracle" else int(timeout),
                 metadata={
                     "session_id": session_id,
                     "step_id": step.step_id,
