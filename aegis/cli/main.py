@@ -1,9 +1,11 @@
 # aegis/cli/main.py
 # Implements: Part X, §10.1 — CLI Management Tool
-"""
-Root CLI application. Assembles all command groups into the `aegis` command.
+"""Root CLI application.
 
-Usage:
+Assembles all command groups into the `aegis` command.
+
+Usage::
+
     aegis start          Start the Aegis system
     aegis stop           Graceful shutdown
     aegis status         Show system health
@@ -14,7 +16,24 @@ Usage:
     aegis schedule ...   Scheduler management
     aegis config ...     Configuration management
     aegis secrets ...    Secret/Key management
+
+Note: .env file values are loaded into os.environ via python-dotenv
+so that environment variables (e.g. OPENROUTER_API_KEY) are available.
 """
+
+from __future__ import annotations
+
+import logging
+
+import structlog
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env file values into os.environ so environment variables
+# (e.g. OPENROUTER_API_KEY) are available to the CLI and system
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.is_file():
+    load_dotenv(dotenv_path=env_path)
 
 import typer
 
@@ -38,20 +57,14 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
-@app.callback(invoke_without_command=True)
-def root(ctx: typer.Context):
-    if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())
-        raise typer.Exit(code=0)
-
-# ── Register top-level commands (the correct way) ──────
+# --- Register top-level commands (the correct way) ──────
 app.command()(start)
 app.command()(stop)
 app.command()(status)
 app.command()(chat)
 app.command()(install)
 
-# ── Register sub-command groups ────────────────────────
+# Register sub-command groups ────────────────────────
 app.add_typer(user_app, name="user", help="User management commands.")
 app.add_typer(tenant_app, name="tenant", help="Tenant management commands.")
 app.add_typer(memory_app, name="memory", help="Lexicon memory commands.")
@@ -62,7 +75,6 @@ app.add_typer(secrets_app, name="secrets", help="Secret/Key management commands.
 
 def main() -> None:
     """Entry point invoked by the console_scripts hook."""
-    
     app()
 
 
