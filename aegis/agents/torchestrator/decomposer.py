@@ -84,6 +84,7 @@ class TaskDecomposer:
                     "action": "query",
                     "temperature": 0.7,
                     "max_tokens": 2000,
+                    "timeout_seconds": 120.0,
                 }
             )
         ]
@@ -124,6 +125,7 @@ class TaskDecomposer:
                 "use_context_from_step": step_context.step_id,
                 "temperature": 0.7,
                 "max_tokens": 2000,
+                "timeout_seconds": 120.0,
             },
             depends_on=[step_context.step_id]
         )
@@ -490,6 +492,7 @@ class TaskDecomposer:
                         "You are TOrchestrator, the conversational AI lead of Project Aegis. "
                         "Respond naturally and helpfully."
                     ),
+                    "timeout_seconds": 120.0,
                 }
             )
         ]
@@ -516,6 +519,7 @@ class TaskDecomposer:
                     "action": "query",
                     "temperature": 0.7,
                     "max_tokens": 2000,
+                    "timeout_seconds": 120.0,
                 }
             )
         ]

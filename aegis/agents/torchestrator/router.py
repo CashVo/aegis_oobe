@@ -98,8 +98,8 @@ class MessageRouter:
 
             # Build the message
             correlation_id = str(uuid4())
-            # Generate a response channel for this step
-            response_channel = f"aegis:stream:torchestrator:step:{step.step_id}"
+            # Use main stream for responses, filter by correlation_id
+            response_channel = "aegis:stream:torchestrator"
             message = AegisMessage(
                 correlation_id=correlation_id,
                 source_agent=self._agent_id,
@@ -120,12 +120,14 @@ class MessageRouter:
             message.payload["response_channel"] = response_channel
 
             # Send authorization check to Warden first
+            # Use a generous timeout for Warden (up to 30s) to accommodate local model cold starts
+            warden_timeout = min(timeout, 30.0)
             authorized = await self._check_authorization(
                 action=step.action,
                 resource=step.payload.get("tool_name", step.payload.get("skill_name", step.action)),
                 tenant_id=tenant_id,
                 user_id=user_id,
-                timeout=min(timeout, 10.0),
+                timeout=warden_timeout,
                 response_channel=response_channel
             )
 
@@ -134,13 +136,15 @@ class MessageRouter:
                 step.error = "Authorization denied by Warden."
                 return step
 
-            # Create consumer group for response channel
+            # Use main stream for responses, filter by correlation_id
             consumer_group = f"torchestrator-step-{step.step_id}"
-            try:
-                await self._subscriber.create_consumer_group(response_channel, consumer_group)
-            except Exception:
-                pass  # Group may already exist
-
+            # Ensure consumer group exists for main stream
+            if self._subscriber:
+                try:
+                    await self._subscriber._ensure_consumer_group(response_channel, consumer_group)
+                except Exception:
+                    pass  # Group may already exist
+            
             # Publish message and wait for response
             response = await self._send_and_wait(message, target_stream, correlation_id, timeout, response_channel, consumer_group)
 
@@ -284,7 +288,7 @@ class MessageRouter:
                         for _, msg_data in messages:
                             parsed = AegisMessage.model_validate(msg_data)
                             if parsed.correlation_id == correlation_id:
-                                future.set_result(parsed)
+                                future.set_result(parsed.payload if hasattr(parsed, 'payload') else parsed)
                                 break
                         if future.done():
                             break

@@ -499,13 +499,17 @@ class SecretsManager:
     
     def move_key(self, key: str, target_source: SecretSource) -> Tuple[bool, str]:
         """Move a key from one source to another (copy + remove from source)."""
+        # First get the original source
+        entries = self.load_all()
+        if key not in entries:
+            return False, f"Key {key} not found"
+        original_source = entries[key].source
+        
         success, msg = self.copy_key(key, target_source)
         if not success:
             return False, msg
         
-        entries = self.load_all()
-        entry = entries[key]
-        return self.remove_key(key, entry.source)
+        return self.remove_key(key, original_source)
     
     def export_keys(self, output_file: Path, include_values: bool = True) -> Tuple[bool, str]:
         """Export all keys to a JSON file (for backup/migration)."""

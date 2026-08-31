@@ -408,16 +408,18 @@ class OracleAgent(BaseAgent):
     async def _handle_embed(
         self, request: OracleRequest, message: AegisMessage
     ) -> OracleResponse:
-        """
-        Handle an EMBED action.
+        """Handle an EMBED action (embedding generation).
         Implements: Part VI §6.2 — OracleAction.EMBED
         """
         llm_def = self.llm_registry.select_model(request.llm_preference)
         provider = self.llm_registry.get_provider(llm_def.provider)
 
+        # OracleRequest uses `prompt` field, wrap in list for embedding API
+        texts = [request.prompt] if isinstance(request.prompt, str) else request.prompt
+
         result = await provider.embed(
             llm_id=llm_def.llm_id,
-            texts=request.texts,
+            texts=texts,
         )
 
         return OracleResponse(

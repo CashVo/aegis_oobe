@@ -764,5 +764,36 @@ The modular agent design with Redis Streams is the right abstraction level. The 
 
 -----
 
+## [0.13.3] - 2026-08-31
+### Fixed — Oracle Embeddings, TOrchestrator Routing & Timeouts, Secrets Move
+
+- **Oracle Agent** (`aegis/agents/oracle/agent.py`):
+  - Fixed `_handle_embed` to correctly wrap `request.prompt` into a list for the embedding API. Previously incorrectly accessed non-existent `request.texts` field.
+
+- **TOrchestrator Decomposer** (`aegis/agents/torchestrator/decomposer.py`):
+  - Added explicit `"timeout_seconds": 120.0` to all generated step configurations (query steps, conversational responses, general queries).
+  - Provides timeout control for LLM calls, preventing indefinite hangs.
+
+- **TOrchestrator Router** (`aegis/agents/torchestrator/router.py`):
+  - Refactored response channel from per-step dedicated streams (`aegis:stream:torchestrator:step:{step_id}`) to single shared stream (`aegis:stream:torchestrator`) with correlation_id filtering.
+  - Improved Warden authorization timeout: now uses `min(timeout, 30.0)` instead of hardcoded `min(timeout, 10.0)`, accommodating local model cold starts.
+  - Fixed consumer group creation using `_ensure_consumer_group` on subscriber directly.
+  - Fixed response parsing to extract `.payload` from parsed `AegisMessage` objects correctly.
+
+- **Secrets Manager** (`aegis/utils/secrets.py`):
+  - Fixed `move_key` bug: now captures original source before copy, then removes from that original source. Previously reloaded entries after copy (getting target source) and removed from wrong location.
+
+### Removed
+- **Documentation**: Deleted `doc/ENVIRONMENT_MANAGEMENT.md` (427-line legacy Git worktree-based dev/test/prod workflow guide with `utils.dev` commands).
+
+### Verification
+- All existing tests continue to pass
+- Embedding generation now functional
+- TOrchestrator message routing streamlined and more robust
+- Secrets move operation works correctly
+
+-----
+"
+
 "
 
