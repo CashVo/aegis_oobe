@@ -31,7 +31,7 @@ from pathlib import Path
 
 # Load .env file values into os.environ so environment variables
 # (e.g. OPENROUTER_API_KEY) are available to the CLI and system
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent.parent.parent / ".env"
 if env_path.is_file():
     load_dotenv(dotenv_path=env_path)
 
