@@ -1,7 +1,6 @@
 # aegis/main.py
 # Implements: Part III §3.3 — Entry Point
-"""
-Aegis System Entry Point.
+"""Aegis System Entry Point.
 
 Launches the System Manager, which bootstraps Redis, the Scheduler,
 and all council agents in the correct dependency order.
@@ -14,6 +13,9 @@ Usage::
 
 Configuration is loaded from ``aegis_config.yaml`` in the current
 working directory. Override with env vars (see SystemManager docs).
+
+Note: .env file values are loaded into os.environ via python-dotenv
+so that environment variables (e.g. OPENROUTER_API_KEY) are available.
 """
 
 from __future__ import annotations
@@ -21,13 +23,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 import structlog
+from dotenv import load_dotenv
+
+# Load .env file values into os.environ so environment variables
+# (e.g. OPENROUTER_API_KEY) are available to the system
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.is_file():
+    load_dotenv(dotenv_path=env_path)
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """
-    Configure structured logging for the Aegis system.
+    """Configure structured logging for the Aegis system.
 
     Uses structlog for JSON-formatted, contextual logging as specified
     in Part III §3.2 (Observer Service logging requirements).
@@ -58,8 +67,7 @@ def configure_logging(level: str = "INFO") -> None:
 
 
 def main() -> None:
-    """
-    Main entry point for the Aegis system.
+    """Main entry point for the Aegis system.
 
     Configures logging, creates the SystemManager, and runs it
     until a shutdown signal is received.
