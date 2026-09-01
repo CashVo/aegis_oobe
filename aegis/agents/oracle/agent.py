@@ -557,6 +557,10 @@ class OracleAgent(BaseAgent):
         self, original: AegisMessage, response: OracleResponse
     ) -> AegisMessage:
         """Build an AegisMessage envelope for the OracleResponse."""
+        payload = response.model_dump()
+        # Preserve response_channel from original message so response goes to correct channel
+        if "response_channel" in original.payload:
+            payload["response_channel"] = original.payload["response_channel"]
         return AegisMessage(
             correlation_id=original.correlation_id or original.message_id,
             source_agent=self.agent_id,
@@ -565,7 +569,7 @@ class OracleAgent(BaseAgent):
             tenant_id=original.tenant_id,
             user_id=original.user_id,
             action=f"{self.agent_id}.response",
-            payload=response.model_dump(),
+            payload=payload,
             priority=Priority.NORMAL,
         )
 

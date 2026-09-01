@@ -466,37 +466,94 @@ class MessageSubscriber:
         self._tasks.clear()
         logger.info(f"Subscriber '{self._agent_id}' stopped.")
 
+    async def consume(
+        self,
+        stream: str,
+        group: str,
+        consumer: str,
+        *,
+        count: int = 1,
+        block_ms: int = 1000,
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """
+        Consume messages from a stream using a consumer group (for request-response patterns).
+
+        This is a simpler interface for one-off consumption, unlike the persistent
+        subscription model of start()/subscribe().
+
+        Args:
+            stream: The Redis stream key.
+            group: The consumer group name.
+            consumer: The consumer name.
+            count: Maximum messages to read.
+            block_ms: Milliseconds to block waiting for messages.
+
+        Returns:
+            List of (entry_id, message_data) tuples.
+        """
+        # Ensure consumer group exists
+        await self._ensure_consumer_group(stream, group)
+
+        try:
+            responses = await self.client.xreadgroup(
+                groupname=group,
+                consumername=consumer,
+                streams={stream: ">"},
+                count=count,
+                block=block_ms,
+            )
+            if not responses:
+                return []
+
+            results = []
+            for stream_name, entries in responses:
+                for entry_id, fields in entries:
+                    raw_data = fields.get("data")
+                    if raw_data is None:
+                        await self.client.xack(stream, group, entry_id)
+                        continue
+                    try:
+                        data = json.loads(raw_data)
+                    except (json.JSONDecodeError, TypeError):
+                        data = {"raw": raw_data}
+                    await self.client.xack(stream, group, entry_id)
+                    results.append((entry_id, data))
+            return results
+        except Exception as e:
+            logger.error(f"Error consuming from '{stream}': {e}")
+            return []
+
     async def subscribe(self, stream: str, handler: Callable[[AegisMessage], Awaitable[None]]) -> None:
-            """
-            Subscribe to an additional stream with a custom handler.
+        """
+        Subscribe to an additional stream with a custom handler.
 
-            This creates a new consumer group and read loop for the given stream.
+        This creates a new consumer group and read loop for the given stream.
 
-            Args:
-                stream: The Redis stream key to subscribe to.
-                handler: Async callback invoked for each AegisMessage (will be deserialized from stream data).
-            """
-            if not self._running:
-                raise RuntimeError("Subscriber not started. Call start() first.")
+        Args:
+            stream: The Redis stream key to subscribe to.
+            handler: Async callback invoked for each AegisMessage (will be deserialized from stream data).
+        """
+        if not self._running:
+            raise RuntimeError("Subscriber not started. Call start() first.")
 
-            # Create a unique consumer group name for this stream
-            group = f"{CONSUMER_GROUP_PREFIX}{self._agent_id}:{stream.replace(':', '_')}"
-            consumer = f"{self._agent_id}-consumer-{len(self._tasks)}"
+        # Create a unique consumer group name for this stream
+        group = f"{CONSUMER_GROUP_PREFIX}{self._agent_id}:{stream.replace(':', '_')}"
+        consumer = f"{self._agent_id}-consumer-{len(self._tasks)}"
 
-            # Ensure consumer group exists
-            await self._ensure_consumer_group(stream, group)
+        # Ensure consumer group exists
+        await self._ensure_consumer_group(stream, group)
 
             # Launch a new read loop task for this stream
-            task = asyncio.create_task(
-                self._read_loop(stream, group, consumer),
-                name=f"subscriber-{self._agent_id}-{stream.replace(':', '-')}",
-            )
+        task = asyncio.create_task(
+            self._read_loop(stream, group, consumer),
+            name=f"subscriber-{self._agent_id}-{stream.replace(':', '-')}",
+        )
 
-            # The _read_loop already deserializes messages to AegisMessage objects,
-            # so we don't need to wrap the handler for deserialization.
-            # Just store the handler directly.
-            self._stream_handlers[stream] = handler
+        # The _read_loop already deserializes messages to AegisMessage objects,
+        # so we don't need to wrap the handler for deserialization.
+        # Just store the handler directly.
+        self._stream_handlers[stream] = handler
 
-            self._tasks.append(task)
+        self._tasks.append(task)
 
-            logger.info(f"Subscriber '{self._agent_id}' subscribed to '{stream}'")
+        logger.info(f"Subscriber '{self._agent_id}' subscribed to '{stream}'")

@@ -75,13 +75,13 @@ class TOrchestrator(BaseAgent):
         """
         # Call parent init for heartbeat and bus support
         super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
-        
+
         # Support both redis_conn and redis_client for compatibility
         redis_client = redis_client or redis_conn
-        
+
         # Store redis connection for startup() to use
         self._redis_conn = redis_client
-        
+
         self._config = config or {}
         self._intent_parser = IntentParser()
         self._decomposer = TaskDecomposer()
@@ -99,7 +99,7 @@ class TOrchestrator(BaseAgent):
     async def startup(self) -> None:
         """Agent initialization — subscribe to channels, load config."""
         logger.info("TOrchestrator starting up...")
-        
+
         # Create our own MessageSubscriber if we have a Redis connection
         if self._redis_conn is not None:
             from aegis.bus.subscriber import MessageSubscriber
@@ -126,7 +126,10 @@ class TOrchestrator(BaseAgent):
                         continue
                     await self._bus_subscriber.subscribe(channel, self._on_bus_message)
                 logger.info(f"TOrchestrator subscribed to additional channels: {[c for c in self.subscriptions if c != main_stream]}")
-        
+
+            # Update router's subscriber reference to our new subscriber
+            self._router._subscriber = self._bus_subscriber
+
         # Subscribe to our stream if bus is available (fallback for backward compat)
         elif self._bus_subscriber:
             for channel in self.subscriptions:
@@ -135,6 +138,7 @@ class TOrchestrator(BaseAgent):
 
         # Start heartbeat for this agent
         await self.start_heartbeat()
+
     async def shutdown(self) -> None:
         """Graceful teardown — persist sessions, unsubscribe."""
         logger.info("TOrchestrator shutting down...")
@@ -452,7 +456,7 @@ class TOrchestrator(BaseAgent):
             tenant_id=session.tenant_id,
             user_id=session.user_id,
             session_id=session.session_id,
-            timeout=15.0,
+            timeout=60.0,  # Increased from 15s to 60s for Oracle classification
         )
 
         if step.status == TaskStatus.COMPLETED and step.result:
@@ -518,54 +522,17 @@ class TOrchestrator(BaseAgent):
                     step.status = TaskStatus.SKIPPED
                     step.error = "Dependencies not met (prerequisite failed)."
 
-            # Execute all executable steps at this level concurrently
-            if len(executable) == 1:
-                # Single step — execute directly
-                step = executable[0]
-                step = await self._router.execute_step(
-                    step=step,
-                    tenant_id=tenant_id,
-                    user_id=user_id,
-                    session_id=session.session_id,
-                    timeout=step.payload.get("timeout_seconds", 60.0),
-                    context_data=context_data,
-                )
-                if step.result:
-                    context_data[step.step_id] = step.result
-            elif len(executable) > 1:
-                # Multiple steps — execute concurrently
-                tasks = [
+            # Execute all executable steps in parallel
+            if executable:
+                await asyncio.gather(*[
                     self._router.execute_step(
                         step=step,
                         tenant_id=tenant_id,
                         user_id=user_id,
                         session_id=session.session_id,
-                        timeout=step.payload.get("timeout_seconds", 60.0),
-                        context_data=context_data,
                     )
                     for step in executable
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        executable[i].status = TaskStatus.FAILED
-                        executable[i].error = str(result)
-                    else:
-                        if result.result:
-                            context_data[result.step_id] = result.result
-
-        # Determine plan-level status
-        all_statuses = [s.status for s in plan.steps]
-        if all(s == TaskStatus.COMPLETED for s in all_statuses):
-            plan.status = TaskStatus.COMPLETED
-        elif any(s == TaskStatus.FAILED for s in all_statuses):
-            # Partial success if at least one step completed
-            if any(s == TaskStatus.COMPLETED for s in all_statuses):
-                plan.status = TaskStatus.COMPLETED  # Partial success
-            else:
-                plan.status = TaskStatus.FAILED
-        else:
-            plan.status = TaskStatus.COMPLETED
+                ])
 
         return plan
 

@@ -276,25 +276,10 @@ class MessageRouter:
             # Use publish_to_stream for direct stream publishing
             await self._publisher.publish_to_stream(target_stream, message)
 
-            # If a specific response channel is provided, consume from it
-            if response_channel and consumer_group and self._subscriber:
-                # Use the subscriber to consume from the response channel
-                deadline = asyncio.get_event_loop().time() + timeout
-                while asyncio.get_event_loop().time() < deadline:
-                    messages = await self._subscriber.consume(
-                        response_channel, consumer_group, self._agent_id,
-                        count=1, block_ms=500,
-                    )
-                    if messages:
-                        for _, msg_data in messages:
-                            parsed = AegisMessage.model_validate(msg_data)
-                            if parsed.correlation_id == correlation_id:
-                                future.set_result(parsed.payload if hasattr(parsed, 'payload') else parsed)
-                                break
-                        if future.done():
-                            break
-
             # Wait for response with timeout
+            # The response will come through handle_incoming_response callback
+            # which is called by the TOrchestrator's subscriber when it receives
+            # a response on its main stream (the response_channel)
             response = await asyncio.wait_for(future, timeout=timeout)
             return response
 
