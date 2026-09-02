@@ -53,6 +53,8 @@ class OracleConfig(BaseModel):
     rate_limit: Dict[str, Any] = {}
     token_budget: Dict[str, Any] = {}
     templates: Dict[str, Any] = {}
+    request_timeout_seconds: int = 120
+    fallback_order: List[str] = ["ollama", "openrouter"]
 
 class AegisConfig(BaseModel):
     """Typed configuration model for the entire Aegis system."""

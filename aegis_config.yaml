@@ -32,7 +32,8 @@ oracle:
   max_concurrent_requests: 8
 
   # Default model preference (must match a key in 'models' below)
-  default_model: "nemotron-3-ultra-550b"
+  # Using local qwen2.5-coder:7b as primary (fast, capable, local)
+  default_model: "qwen2.5-coder:7b"
 
   # ── Provider Configuration ──
   providers:
@@ -48,7 +49,7 @@ oracle:
       provider_type: "openrouter"
       base_url: "https://openrouter.ai/api/v1"
       api_key_env: "OPENROUTER_API_KEY"
-      enabled: true
+      enabled: true  # Enabled for fallback when Ollama fails
       timeout_seconds: 60
       max_concurrent: 8
       max_retries: 3
@@ -175,6 +176,14 @@ oracle:
   token_budget:
     tokens_per_word: 1.35
     safety_margin: 0.05
+
+  # ── Request Timeout (seconds) ──
+  request_timeout_seconds: 120
+
+  # ── Fallback Order ──
+  # Try providers in this order. First successful provider wins.
+  # If all fail, request fails with error from last provider.
+  fallback_order: ["ollama", "openrouter"]
 
   # ── Prompt Templates ──
   templates:

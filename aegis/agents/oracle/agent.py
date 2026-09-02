@@ -78,7 +78,7 @@ class OracleAgent(BaseAgent):
         super().__init__(agent_id=self.agent_id, subscriptions=self.subscriptions)
 
         self._config = config or {}
-        
+
         # Config can be either the full config with "oracle" key, or already the oracle section,
         # or an AegisConfig pydantic model. Handle all cases.
         if hasattr(self._config, "model_dump"):
@@ -88,7 +88,7 @@ class OracleAgent(BaseAgent):
             config_dict = self._config
         else:
             config_dict = {}
-        
+
         if "oracle" in config_dict:
             oracle_cfg = config_dict["oracle"]
         else:
@@ -122,6 +122,9 @@ class OracleAgent(BaseAgent):
         self._request_semaphore = asyncio.Semaphore(
             oracle_cfg.get("max_concurrent_requests", 8)
         )
+        self._request_timeout = oracle_cfg.get("request_timeout_seconds", 120)
+        # Fallback configuration: try providers in this order
+        self._fallback_order = oracle_cfg.get("fallback_order", ["ollama", "openrouter"])
 
         logger.info("oracle.initialized", models=self.llm_registry.list_models())
 
@@ -191,7 +194,7 @@ class OracleAgent(BaseAgent):
         4. Check response cache
         5. Assemble prompt via engine
         6. Validate token budget
-        7. Execute LLM call via provider
+        7. Execute LLM call via provider with fallback support
         8. Cache response
         9. Return OracleResponse envelope
 
@@ -228,9 +231,9 @@ class OracleAgent(BaseAgent):
                 elif request.action == OracleAction.CLASSIFY:
                     response = await self._handle_classify(request, message)
                 elif request.action == OracleAction.STRUCTURED:
-                    response = await self._handle_structured(request, message)
+                    response = await self._handle_structured_with_fallback(request, message)
                 else:
-                    response = await self._handle_query(request, message)
+                    response = await self._handle_query_with_fallback(request, message)
 
             elapsed_ms = (time.monotonic() - start_time) * 1000
             response.latency_ms = elapsed_ms
@@ -257,6 +260,16 @@ class OracleAgent(BaseAgent):
             return self._build_error_message(
                 message, f"Provider error: {e}", elapsed_ms
             )
+        except asyncio.TimeoutError:
+            elapsed_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "oracle.request_timeout",
+                correlation_id=correlation_id,
+                timeout_s=self._config.get("request_timeout_seconds", 60),
+            )
+            return self._build_error_message(
+                message, f"Request timed out after {self._config.get('request_timeout_seconds', 60)}s", elapsed_ms
+            )
         except Exception as e:
             elapsed_ms = (time.monotonic() - start_time) * 1000
             logger.error(
@@ -271,139 +284,153 @@ class OracleAgent(BaseAgent):
 
     # ── Action Handlers ──────────────────────────────────────────────
 
-    async def _handle_query(
+    async def _handle_query_with_fallback(
         self, request: OracleRequest, message: AegisMessage
     ) -> OracleResponse:
         """
-        Handle a standard QUERY action.
+        Handle a standard QUERY action with provider fallback support.
+
+        Tries providers in the order specified in config fallback_order.
+        First successful provider wins. If all fail, request fails with error
+        from the last provider to attempt.
+
+        Handles specific OpenRouter errors (404 guardrail, rate limits) by
+        automatically falling back to the next provider.
+
         Implements: Part VI §6.2 — OracleAction.QUERY
         """
-        # Check if we should use ModelRouter (tiered fallback) for this request
-        # Use ModelRouter for OpenRouter models
+        start_time = time.monotonic()
         llm_def = self.llm_registry.select_model(request.llm_preference)
 
-        if llm_def.provider == "openrouter" and self.model_router:
-            return await self._handle_query_via_model_router(request, message, llm_def)
+        # Get fallback order from config: ["ollama", "openrouter"]
+        fallback_order = self._fallback_order
 
-        # Original provider-based flow
-        provider = self.llm_registry.get_provider(llm_def.provider)
+        # Build provider configs: provider_name -> provider_config
+        provider_configs = {}
+        for provider_name in fallback_order:
+            if provider_name in self.llm_registry._provider_configs:
+                provider_configs[provider_name] = self.llm_registry._provider_configs[provider_name]
 
-        # Check cache
-        cache_key = self.cache.compute_key(request, llm_def.llm_id)
-        cached = await self.cache.get(cache_key)
-        if cached is not None:
-            return OracleResponse(
-                success=True,
-                content=cached["content"],
-                llm_used=cached["llm_used"],
-                tokens_used=cached.get("tokens_used", {}),
-                cached=True,
-            )
+        last_error = None
+        last_error_provider = None
 
-        # Assemble prompt
-        system_prompt, user_prompt = self.prompt_engine.assemble(
-            prompt=request.prompt,
-            system_prompt=request.system_prompt,
-            context_packet=request.context_packet,
-        )
+        # Try each provider in order
+        for provider_name in fallback_order:
+            if provider_name not in provider_configs:
+                logger.warning(f"Provider '{provider_name}' not configured, skipping")
+                continue
 
-        # Validate token budget
-        estimated_input = self.token_manager.estimate_tokens(
-            system_prompt + user_prompt
-        )
-        self.token_manager.validate_budget(
-            estimated_input=estimated_input,
-            max_output=request.max_tokens,
-            context_window=llm_def.context_window,
-        )
+            try:
+                provider = self.llm_registry.get_provider(provider_name)
+                logger.info(f"Trying LLM provider: {provider_name} (model: {llm_def.llm_id})")
 
-        # Execute LLM call
-        result = await provider.generate(
-            llm_id=llm_def.llm_id,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-        )
+                # Assemble prompt
+                system_prompt, user_prompt = self.prompt_engine.assemble(
+                    prompt=request.prompt,
+                    system_prompt=request.system_prompt,
+                    context_packet=request.context_packet,
+                )
 
-        # Cache the response
-        response = OracleResponse(
-            success=True,
-            content=result["content"],
-            llm_used=llm_def.llm_id,
-            tokens_used=result.get("tokens_used", {}),
-        )
-        await self.cache.store(cache_key, response)
+                # Validate token budget
+                estimated_input = self.token_manager.estimate_tokens(
+                    system_prompt + user_prompt
+                )
+                self.token_manager.validate_budget(
+                    estimated_input=estimated_input,
+                    max_output=request.max_tokens,
+                    context_window=llm_def.context_window,
+                )
 
-        # Track token usage
-        self.token_manager.record_usage(
-            tenant_id=message.tenant_id,
-            user_id=message.user_id,
-            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
-            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
-        )
+                # Check cache
+                cache_key = self.cache.compute_key(request, llm_def.llm_id)
+                cached = await self.cache.get(cache_key)
+                if cached is not None:
+                    logger.info(f"Cache hit for model {llm_def.llm_id}")
+                    return OracleResponse(
+                        success=True,
+                        content=cached["content"],
+                        llm_used=cached["llm_used"],
+                        tokens_used=cached.get("tokens_used", {}),
+                        cached=True,
+                    )
 
-        return response
+                # Execute LLM call with timeout
+                result = await asyncio.wait_for(
+                    provider.generate(
+                        llm_id=llm_def.llm_id,
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        temperature=request.temperature,
+                        max_tokens=request.max_tokens,
+                    ),
+                    timeout=self._request_timeout,
+                )
 
-    async def _handle_query_via_model_router(
-        self, request: OracleRequest, message: AegisMessage, llm_def
-    ) -> OracleResponse:
-        """
-        Handle query via ModelRouter (tiered fallback for OpenRouter).
-        """
-        # Assemble prompt
-        system_prompt, user_prompt = self.prompt_engine.assemble(
-            prompt=request.prompt,
-            system_prompt=request.system_prompt,
-            context_packet=request.context_packet,
-        )
+                logger.info(f"Provider '{provider_name}' succeeded after {time.monotonic() - start_time:.2f}s")
 
-        # Validate token budget
-        estimated_input = self.token_manager.estimate_tokens(
-            system_prompt + user_prompt
-        )
-        self.token_manager.validate_budget(
-            estimated_input=estimated_input,
-            max_output=request.max_tokens,
-            context_window=llm_def.context_window,
-        )
+                response = OracleResponse(
+                    success=True,
+                    content=result["content"],
+                    llm_used=result.get("model", llm_def.llm_id),
+                    tokens_used=result.get("tokens_used", {}),
+                )
 
-        # Execute via ModelRouter
-        from work_tracker.model_router import CompletionRequest
-        
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_prompt})
-        
-        completion_request = CompletionRequest(
-            messages=messages,
-            model=None,  # Auto-select from tier chain
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=False,
-        )
-        
-        response = await self.model_router.complete(completion_request)
-        
-        # Track token usage
-        self.token_manager.record_usage(
-            tenant_id=message.tenant_id,
-            user_id=message.user_id,
-            input_tokens=response.prompt_tokens,
-            output_tokens=response.completion_tokens,
-        )
-        
-        return OracleResponse(
-            success=True,
-            content=response.content,
-            llm_used=response.model,
-            tokens_used={
-                "prompt_tokens": response.prompt_tokens,
-                "completion_tokens": response.completion_tokens,
-                "total_tokens": response.total_tokens,
-            },
-        )
+                # Cache the response
+                await self.cache.store(cache_key, response)
+
+                # Track token usage
+                self.token_manager.record_usage(
+                    tenant_id=message.tenant_id,
+                    user_id=message.user_id,
+                    input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
+                    output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
+                )
+
+                return response
+
+            except asyncio.TimeoutError:
+                logger.warning(f"Provider '{provider_name}' timed out after {self._request_timeout}s")
+                last_error = ProviderError(f"Provider '{provider_name}' timed out after {self._request_timeout}s")
+                last_error_provider = provider_name
+                continue
+            except ProviderError as e:
+                # Check for specific OpenRouter errors that should trigger fallback
+                error_msg = str(e).lower()
+                should_fallback = False
+
+                # OpenRouter specific errors that should trigger fallback
+                if "404" in error_msg and ("no endpoints" in error_msg or "guardrail" in error_msg or "privacy" in error_msg):
+                    should_fallback = True
+                    logger.warning(f"OpenRouter guardrail/404 error, will fallback: {e}")
+                elif "429" in error_msg or "rate limit" in error_msg:
+                    should_fallback = True
+                    logger.warning(f"OpenRouter rate limit hit, will fallback: {e}")
+                elif "503" in error_msg or "unavailable" in error_msg:
+                    should_fallback = True
+                    logger.warning(f"OpenRouter service unavailable, will fallback: {e}")
+
+                if should_fallback and provider_name != fallback_order[-1]:
+                    logger.info(f"Falling back to next provider due to: {e}")
+                    last_error = e
+                    last_error_provider = provider_name
+                    continue
+                else:
+                    # Last provider or non-retryable error
+                    logger.error(f"Provider '{provider_name}' failed (non-retryable): {e}")
+                    last_error = e
+                    last_error_provider = provider_name
+                    raise
+            except Exception as e:
+                logger.warning(f"Provider '{provider_name}' failed unexpectedly: {str(e)[:100]}")
+                last_error = ProviderError(f"Provider '{provider_name}' failed: {e}")
+                last_error_provider = provider_name
+                # Continue to next provider for unexpected errors
+                continue
+
+        # All providers failed
+        error_msg = f"All LLM providers failed. Last error from '{last_error_provider}': {last_error}"
+        logger.error("oracle.all_providers_failed", error=error_msg)
+        raise ProviderError(error_msg)
 
     async def _handle_embed(
         self, request: OracleRequest, message: AegisMessage
@@ -411,7 +438,7 @@ class OracleAgent(BaseAgent):
         """Handle an EMBED action (embedding generation).
         Implements: Part VI §6.2 — OracleAction.EMBED
         """
-        llm_def = self.llm_registry.select_model(request.llm_preference)
+        llm_def = self.llm_registry.select_embedding_model(request.llm_preference)
         provider = self.llm_registry.get_provider(llm_def.provider)
 
         # OracleRequest uses `prompt` field, wrap in list for embedding API
@@ -436,123 +463,143 @@ class OracleAgent(BaseAgent):
         Handle a CLASSIFY action.
         Implements: Part VI §6.2 — OracleAction.CLASSIFY
         """
-        return await self._handle_query(request, message)
+        return await self._handle_query_with_fallback(request, message)
 
-    async def _handle_structured(
+    async def _handle_structured_with_fallback(
         self, request: OracleRequest, message: AegisMessage
     ) -> OracleResponse:
         """
-        Handle a STRUCTURED action (JSON-mode output).
+        Handle a STRUCTURED action (JSON-mode output) with provider fallback support.
         Implements: Part VI §6.2 — OracleAction.STRUCTURED
         """
+        start_time = time.monotonic()
         llm_def = self.llm_registry.select_model(
             request.llm_preference, require_json=True
         )
 
-        # Use ModelRouter for OpenRouter models
-        if llm_def.provider == "openrouter" and self.model_router:
-            return await self._handle_structured_via_model_router(request, message, llm_def)
+        # Get fallback order from config
+        fallback_order = self._fallback_order
 
-        provider = self.llm_registry.get_provider(llm_def.provider)
+        # Build provider configs
+        provider_configs = {}
+        for provider_name in fallback_order:
+            if provider_name in self.llm_registry._provider_configs:
+                provider_configs[provider_name] = self.llm_registry._provider_configs[provider_name]
 
-        system_prompt, user_prompt = self.prompt_engine.assemble(
-            prompt=request.prompt,
-            system_prompt=request.system_prompt,
-            context_packet=request.context_packet,
-            force_json_instruction=True,
-        )
+        last_error = None
+        last_error_provider = None
 
-        estimated_input = self.token_manager.estimate_tokens(
-            system_prompt + user_prompt
-        )
-        self.token_manager.validate_budget(
-            estimated_input=estimated_input,
-            max_output=request.max_tokens,
-            context_window=llm_def.context_window,
-        )
+        # Try each provider in order
+        for provider_name in fallback_order:
+            if provider_name not in provider_configs:
+                logger.warning(f"Provider '{provider_name}' not configured, skipping")
+                continue
 
-        result = await provider.generate(
-            llm_id=llm_def.llm_id,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-        )
+            try:
+                provider = self.llm_registry.get_provider(provider_name)
+                logger.info(f"Trying structured LLM provider: {provider_name} (model: {llm_def.llm_id})")
 
-        response = OracleResponse(
-            success=True,
-            content=result["content"],
-            llm_used=llm_def.llm_id,
-            tokens_used=result.get("tokens_used", {}),
-        )
+                system_prompt, user_prompt = self.prompt_engine.assemble(
+                    prompt=request.prompt,
+                    system_prompt=request.system_prompt,
+                    context_packet=request.context_packet,
+                    force_json_instruction=True,
+                )
 
-        # Track token usage
-        self.token_manager.record_usage(
-            tenant_id=message.tenant_id,
-            user_id=message.user_id,
-            input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
-            output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
-        )
+                estimated_input = self.token_manager.estimate_tokens(
+                    system_prompt + user_prompt
+                )
+                self.token_manager.validate_budget(
+                    estimated_input=estimated_input,
+                    max_output=request.max_tokens,
+                    context_window=llm_def.context_window,
+                )
 
-        return response
+                # Check cache
+                cache_key = self.cache.compute_key(request, llm_def.llm_id)
+                cached = await self.cache.get(cache_key)
+                if cached is not None:
+                    logger.info(f"Cache hit for structured model {llm_def.llm_id}")
+                    return OracleResponse(
+                        success=True,
+                        content=cached["content"],
+                        llm_used=cached["llm_used"],
+                        tokens_used=cached.get("tokens_used", {}),
+                        cached=True,
+                    )
 
-    async def _handle_structured_via_model_router(
-        self, request: OracleRequest, message: AegisMessage, llm_def
-    ) -> OracleResponse:
-        """Handle STRUCTURED via ModelRouter (OpenRouter)."""
-        system_prompt, user_prompt = self.prompt_engine.assemble(
-            prompt=request.prompt,
-            system_prompt=request.system_prompt,
-            context_packet=request.context_packet,
-            force_json_instruction=True,
-        )
+                result = await asyncio.wait_for(
+                    provider.generate(
+                        llm_id=llm_def.llm_id,
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        temperature=request.temperature,
+                        max_tokens=request.max_tokens,
+                        response_format="json",
+                    ),
+                    timeout=self._request_timeout,
+                )
 
-        estimated_input = self.token_manager.estimate_tokens(
-            system_prompt + user_prompt
-        )
-        self.token_manager.validate_budget(
-            estimated_input=estimated_input,
-            max_output=request.max_tokens,
-            context_window=llm_def.context_window,
-        )
+                logger.info(f"Structured provider '{provider_name}' succeeded after {time.monotonic() - start_time:.2f}s")
 
-        from work_tracker.model_router import CompletionRequest
-        
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_prompt})
-        
-        completion_request = CompletionRequest(
-            messages=messages,
-            model=None,  # Auto-select from tier chain
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=False,
-        )
-        
-        response = await self.model_router.complete(completion_request)
+                response = OracleResponse(
+                    success=True,
+                    content=result["content"],
+                    llm_used=result.get("model", llm_def.llm_id),
+                    tokens_used=result.get("tokens_used", {}),
+                )
+                await self.cache.store(cache_key, response)
 
-        self.token_manager.record_usage(
-            tenant_id=message.tenant_id,
-            user_id=message.user_id,
-            input_tokens=response.prompt_tokens,
-            output_tokens=response.completion_tokens,
-        )
+                self.token_manager.record_usage(
+                    tenant_id=message.tenant_id,
+                    user_id=message.user_id,
+                    input_tokens=result.get("tokens_used", {}).get("prompt_tokens", 0),
+                    output_tokens=result.get("tokens_used", {}).get("completion_tokens", 0),
+                )
 
-        return OracleResponse(
-            success=True,
-            content=response.content,
-            llm_used=response.model,
-            tokens_used={
-                "prompt_tokens": response.prompt_tokens,
-                "completion_tokens": response.completion_tokens,
-                "total_tokens": response.total_tokens,
-            },
-        )
+                return response
+
+            except asyncio.TimeoutError:
+                logger.warning(f"Structured provider '{provider_name}' timed out after {self._request_timeout}s")
+                last_error = ProviderError(f"Provider '{provider_name}' timed out after {self._request_timeout}s")
+                last_error_provider = provider_name
+                continue
+            except ProviderError as e:
+                error_msg = str(e).lower()
+                should_fallback = False
+
+                if "404" in error_msg and ("no endpoints" in error_msg or "guardrail" in error_msg or "privacy" in error_msg):
+                    should_fallback = True
+                    logger.warning(f"OpenRouter guardrail/404 error in structured, will fallback: {e}")
+                elif "429" in error_msg or "rate limit" in error_msg:
+                    should_fallback = True
+                    logger.warning(f"OpenRouter rate limit hit in structured, will fallback: {e}")
+                elif "503" in error_msg or "unavailable" in error_msg:
+                    should_fallback = True
+                    logger.warning(f"OpenRouter service unavailable in structured, will fallback: {e}")
+
+                if should_fallback and provider_name != fallback_order[-1]:
+                    logger.info(f"Falling back to next provider due to: {e}")
+                    last_error = e
+                    last_error_provider = provider_name
+                    continue
+                else:
+                    logger.error(f"Structured provider '{provider_name}' failed (non-retryable): {e}")
+                    last_error = e
+                    last_error_provider = provider_name
+                    raise
+            except Exception as e:
+                logger.warning(f"Structured provider '{provider_name}' failed unexpectedly: {str(e)[:100]}")
+                last_error = ProviderError(f"Provider '{provider_name}' failed: {e}")
+                last_error_provider = provider_name
+                continue
+
+        error_msg = f"All structured LLM providers failed. Last error from '{last_error_provider}': {last_error}"
+        logger.error("oracle.all_structured_providers_failed", error=error_msg)
+        raise ProviderError(error_msg)
 
     # ── Response Building ────────────────────────────────────────────
-
+    # (Existing methods unchanged)
     def _build_response_message(
         self, original: AegisMessage, response: OracleResponse
     ) -> AegisMessage:
