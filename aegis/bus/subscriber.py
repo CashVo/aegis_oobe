@@ -101,10 +101,12 @@ class MessageSubscriber:
         # Derived names
         self._stream = agent_stream(agent_id)
         self._group = agent_consumer_group(agent_id)
-        self._consumer = f"{agent_id}-consumer-1"
+        # Use unique consumer name per startup to avoid claiming old pending messages
+        import uuid
+        self._consumer = f"{agent_id}-consumer-{uuid.uuid4().hex[:8]}"
 
         self._broadcast_group = broadcast_consumer_group(agent_id)
-        self._broadcast_consumer = f"{agent_id}-broadcast-consumer-1"
+        self._broadcast_consumer = f"{agent_id}-broadcast-consumer-{uuid.uuid4().hex[:8]}"
 
         # Control
         self._running: bool = False
@@ -278,6 +280,13 @@ class MessageSubscriber:
         # First, process any pending (previously claimed) messages
         pending = await self._claim_pending_messages(stream, group, consumer)
         for msg in pending:
+            # Check TTL expiration for claimed messages
+            if self._is_expired(msg):
+                logger.warning(
+                    f"Claimed message {msg.message_id} expired "
+                    f"(ttl={msg.ttl_seconds}s). Dropping."
+                )
+                continue
             try:
                 await handler(msg)
             except Exception as e:
@@ -299,6 +308,13 @@ class MessageSubscriber:
                     logger.debug(f"Periodic pending message check on '{stream}'")
                     pending = await self._claim_pending_messages(stream, group, consumer)
                     for msg in pending:
+                        # Check TTL expiration for claimed messages
+                        if self._is_expired(msg):
+                            logger.warning(
+                                f"Reclaimed message {msg.message_id} expired "
+                                f"(ttl={msg.ttl_seconds}s). Dropping."
+                            )
+                            continue
                         try:
                             await handler(msg)
                         except Exception as e:
