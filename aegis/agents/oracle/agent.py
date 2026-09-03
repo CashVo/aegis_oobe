@@ -31,7 +31,7 @@ from aegis.schemas.oracle import (
     OracleRequest,
     OracleResponse,
 )
-from aegis.agents.oracle.llm_registry import LLMRegistry
+from aegis.agents.oracle.llm_registry import LLMRegistry, ModelNotFoundError
 from aegis.agents.oracle.prompt_engine import PromptEngine
 from aegis.agents.oracle.token_manager import TokenManager
 from aegis.agents.oracle.cache import ResponseCache
@@ -282,6 +282,51 @@ class OracleAgent(BaseAgent):
                 message, f"Oracle error: {e}", elapsed_ms
             )
 
+    def _select_model_for_provider(
+        self, models: list, preference: str | None, require_json: bool = False
+    ):
+        """
+        Select the best model from a list of models for a specific provider.
+        
+        Selection priority:
+        1. Exact llm_id match (if preference is a model name)
+        2. Tag-based match (if preference is a tag like "fast", "capable")
+        3. Default model (tagged "default")
+        4. First available model
+        """
+        candidates = list(models)
+        
+        # Filter out embedding-only models for generation
+        candidates = [m for m in candidates if not m.supports_embeddings or m.supports_json_mode]
+        
+        if require_json:
+            candidates = [m for m in candidates if m.supports_json_mode]
+            
+        if not candidates:
+            raise ModelNotFoundError(
+                f"No suitable model found for preference='{preference}', "
+                f"require_json={require_json}"
+            )
+
+        if preference:
+            # 1. Exact llm_id match
+            for m in candidates:
+                if m.llm_id == preference:
+                    return m
+
+            # 2. Tag-based match
+            tagged = [m for m in candidates if preference in m.preference_tags]
+            if tagged:
+                return tagged[0]
+
+        # 3. Default tag
+        defaults = [m for m in candidates if "default" in m.preference_tags]
+        if defaults:
+            return defaults[0]
+
+        # 4. First available
+        return candidates[0]
+
     # ── Action Handlers ──────────────────────────────────────────────
 
     async def _handle_query_with_fallback(
@@ -322,7 +367,22 @@ class OracleAgent(BaseAgent):
 
             try:
                 provider = self.llm_registry.get_provider(provider_name)
-                logger.info(f"Trying LLM provider: {provider_name} (model: {llm_def.llm_id})")
+                
+                # Select the best model for THIS specific provider
+                # Filter models to those served by this provider
+                provider_models = [
+                    m for m in self.llm_registry._models.values()
+                    if m.provider == provider_name
+                ]
+                if not provider_models:
+                    raise ProviderError(f"No models available for provider '{provider_name}'")
+                
+                # Select model for this provider based on preference
+                provider_llm_def = self._select_model_for_provider(
+                    provider_models, request.llm_preference, require_json=False
+                )
+                
+                logger.info(f"Trying LLM provider: {provider_name} (model: {provider_llm_def.llm_id})")
 
                 # Assemble prompt
                 system_prompt, user_prompt = self.prompt_engine.assemble(
@@ -338,14 +398,14 @@ class OracleAgent(BaseAgent):
                 self.token_manager.validate_budget(
                     estimated_input=estimated_input,
                     max_output=request.max_tokens,
-                    context_window=llm_def.context_window,
+                    context_window=provider_llm_def.context_window,
                 )
 
-                # Check cache
-                cache_key = self.cache.compute_key(request, llm_def.llm_id)
+                # Check cache (using provider-specific model ID)
+                cache_key = self.cache.compute_key(request, provider_llm_def.llm_id)
                 cached = await self.cache.get(cache_key)
                 if cached is not None:
-                    logger.info(f"Cache hit for model {llm_def.llm_id}")
+                    logger.info(f"Cache hit for model {provider_llm_def.llm_id}")
                     return OracleResponse(
                         success=True,
                         content=cached["content"],
@@ -357,7 +417,7 @@ class OracleAgent(BaseAgent):
                 # Execute LLM call with timeout
                 result = await asyncio.wait_for(
                     provider.generate(
-                        llm_id=llm_def.llm_id,
+                        llm_id=provider_llm_def.llm_id,
                         system_prompt=system_prompt,
                         user_prompt=user_prompt,
                         temperature=request.temperature,
@@ -371,7 +431,7 @@ class OracleAgent(BaseAgent):
                 response = OracleResponse(
                     success=True,
                     content=result["content"],
-                    llm_used=result.get("model", llm_def.llm_id),
+                    llm_used=result.get("model", provider_llm_def.llm_id),
                     tokens_used=result.get("tokens_used", {}),
                 )
 
@@ -473,9 +533,6 @@ class OracleAgent(BaseAgent):
         Implements: Part VI §6.2 — OracleAction.STRUCTURED
         """
         start_time = time.monotonic()
-        llm_def = self.llm_registry.select_model(
-            request.llm_preference, require_json=True
-        )
 
         # Get fallback order from config
         fallback_order = self._fallback_order
@@ -497,7 +554,21 @@ class OracleAgent(BaseAgent):
 
             try:
                 provider = self.llm_registry.get_provider(provider_name)
-                logger.info(f"Trying structured LLM provider: {provider_name} (model: {llm_def.llm_id})")
+                
+                # Select the best model for THIS specific provider (with JSON mode support)
+                provider_models = [
+                    m for m in self.llm_registry._models.values()
+                    if m.provider == provider_name
+                ]
+                if not provider_models:
+                    raise ProviderError(f"No models available for provider '{provider_name}'")
+                
+                # Select model for this provider based on preference, requiring JSON mode
+                provider_llm_def = self._select_model_for_provider(
+                    provider_models, request.llm_preference, require_json=True
+                )
+                
+                logger.info(f"Trying structured LLM provider: {provider_name} (model: {provider_llm_def.llm_id})")
 
                 system_prompt, user_prompt = self.prompt_engine.assemble(
                     prompt=request.prompt,
@@ -512,14 +583,14 @@ class OracleAgent(BaseAgent):
                 self.token_manager.validate_budget(
                     estimated_input=estimated_input,
                     max_output=request.max_tokens,
-                    context_window=llm_def.context_window,
+                    context_window=provider_llm_def.context_window,
                 )
 
-                # Check cache
-                cache_key = self.cache.compute_key(request, llm_def.llm_id)
+                # Check cache (using provider-specific model ID)
+                cache_key = self.cache.compute_key(request, provider_llm_def.llm_id)
                 cached = await self.cache.get(cache_key)
                 if cached is not None:
-                    logger.info(f"Cache hit for structured model {llm_def.llm_id}")
+                    logger.info(f"Cache hit for structured model {provider_llm_def.llm_id}")
                     return OracleResponse(
                         success=True,
                         content=cached["content"],
@@ -530,7 +601,7 @@ class OracleAgent(BaseAgent):
 
                 result = await asyncio.wait_for(
                     provider.generate(
-                        llm_id=llm_def.llm_id,
+                        llm_id=provider_llm_def.llm_id,
                         system_prompt=system_prompt,
                         user_prompt=user_prompt,
                         temperature=request.temperature,
@@ -545,7 +616,7 @@ class OracleAgent(BaseAgent):
                 response = OracleResponse(
                     success=True,
                     content=result["content"],
-                    llm_used=result.get("model", llm_def.llm_id),
+                    llm_used=result.get("model", provider_llm_def.llm_id),
                     tokens_used=result.get("tokens_used", {}),
                 )
                 await self.cache.store(cache_key, response)
