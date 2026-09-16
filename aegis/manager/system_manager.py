@@ -203,6 +203,7 @@ class SystemManager:
 
         self._agents: Dict[str, AgentState] = {}
         self._scheduler: Optional[AegisScheduler] = None
+        self._web_server: Optional[Any] = None  # Track web server for shutdown
         self.client_conn: Optional[Any] = None
         self._health_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
@@ -482,6 +483,15 @@ class SystemManager:
         logger.info("=" * 60)
 
         self._running = False
+
+        # Stop web server if running
+        if self._web_server:
+            logger.info("[Web Server] Stopping...")
+            try:
+                await self._web_server.shutdown()
+                logger.info("[Web Server] Stopped")
+            except Exception as exc:
+                logger.error("[Web Server] Shutdown failed: %s", exc)
 
         # Cancel health check
         if self._health_task and not self._health_task.done():

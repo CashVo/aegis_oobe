@@ -112,6 +112,9 @@ class MessageSubscriber:
         self._running: bool = False
         self._tasks: list[asyncio.Task] = []
 
+        # Stream-specific handlers (for multiple subscriptions)
+        self._stream_handlers: dict[str, MessageHandler] = {}
+
     @property
     def is_running(self) -> bool:
         """Whether the subscriber read loop is active."""
@@ -150,7 +153,7 @@ class MessageSubscriber:
 
     async def _claim_pending_messages(
         self, stream: str, group: str, consumer: str
-    ) -> list[AegisMessage]:
+    ) -> list[tuple[str, AegisMessage]]:
         """
         Claim and return pending messages that have exceeded the idle threshold.
 
@@ -163,9 +166,9 @@ class MessageSubscriber:
             consumer: The consumer name to claim messages for.
 
         Returns:
-            A list of deserialized AegisMessage objects from claimed entries.
+            A list of (entry_id, AegisMessage) tuples from claimed entries.
         """
-        claimed_messages: list[AegisMessage] = []
+        claimed_messages: list[tuple[str, AegisMessage]] = []
 
         try:
             # XAUTOCLAIM returns: [next_start_id, [[id, fields], ...], [deleted_ids]]
@@ -183,7 +186,7 @@ class MessageSubscriber:
                 for entry_id, fields in entries:
                     msg = self._deserialize_entry(entry_id, fields)
                     if msg is not None:
-                        claimed_messages.append(msg)
+                        claimed_messages.append((entry_id, msg))
 
             if claimed_messages:
                 logger.info(
@@ -271,29 +274,30 @@ class MessageSubscriber:
         )
 
         # Get the handler for this stream (fall back to default)
-        handler = self._stream_handlers.get(stream, self._handler) if hasattr(self, '_stream_handlers') else self._handler
+        handler = self._stream_handlers.get(stream, self._handler)
         if handler is None:
             logger.warning(f"No handler registered for stream {stream}, dropping message")
-            await self._acknowledge(stream, group, entry_id)
-            return  # Exit the read loop for this stream
-        
+            # We can't ack without entry_id, just exit this stream's loop
+            return
+
         # First, process any pending (previously claimed) messages
         pending = await self._claim_pending_messages(stream, group, consumer)
-        for msg in pending:
+        for entry_id, msg in pending:
             # Check TTL expiration for claimed messages
             if self._is_expired(msg):
                 logger.warning(
                     f"Claimed message {msg.message_id} expired "
-                    f"(ttl={msg.ttl_seconds}s). Dropping."
+                    f"(ttl={msg.ttl_seconds}s). Dropping and acknowledging."
                 )
+                await self._acknowledge(stream, group, entry_id)
                 continue
             try:
                 await handler(msg)
+                await self._acknowledge(stream, group, entry_id)
             except Exception as e:
                 logger.error(
                     f"Handler error processing pending message "
-                    f"{msg.message_id}: {e}",
-                    exc_info=True,
+                    f"{msg.message_id}: {e}", exc_info=True
                 )
 
         # Main read loop
@@ -307,21 +311,22 @@ class MessageSubscriber:
                 if now - last_claim_check >= CLAIM_CHECK_INTERVAL:
                     logger.debug(f"Periodic pending message check on '{stream}'")
                     pending = await self._claim_pending_messages(stream, group, consumer)
-                    for msg in pending:
+                    for entry_id, msg in pending:
                         # Check TTL expiration for claimed messages
                         if self._is_expired(msg):
                             logger.warning(
                                 f"Reclaimed message {msg.message_id} expired "
-                                f"(ttl={msg.ttl_seconds}s). Dropping."
+                                f"(ttl={msg.ttl_seconds}s). Dropping and acknowledging."
                             )
+                            await self._acknowledge(stream, group, entry_id)
                             continue
                         try:
                             await handler(msg)
+                            await self._acknowledge(stream, group, entry_id)
                         except Exception as e:
                             logger.error(
                                 f"Handler error processing reclaimed pending message "
-                                f"{msg.message_id}: {e}",
-                                exc_info=True,
+                                f"{msg.message_id}: {e}", exc_info=True
                             )
                     last_claim_check = now
 
@@ -498,19 +503,22 @@ class MessageSubscriber:
         subscription model of start()/subscribe().
 
         Args:
-            stream: The Redis stream key.
+            stream: The Redis stream key to consume from.
             group: The consumer group name.
             consumer: The consumer name.
             count: Maximum messages to read.
             block_ms: Milliseconds to block waiting for messages.
 
         Returns:
-            List of (entry_id, message_data) tuples.
+            List of (entry_id, data_dict) tuples.
         """
-        # Ensure consumer group exists
-        await self._ensure_consumer_group(stream, group)
+        if not self._running:
+            raise RuntimeError("Subscriber not started. Call start() first.")
 
         try:
+            # Ensure consumer group exists
+            await self._ensure_consumer_group(stream, group)
+
             responses = await self.client.xreadgroup(
                 groupname=group,
                 consumername=consumer,
@@ -518,6 +526,7 @@ class MessageSubscriber:
                 count=count,
                 block=block_ms,
             )
+
             if not responses:
                 return []
 
@@ -526,50 +535,60 @@ class MessageSubscriber:
                 for entry_id, fields in entries:
                     raw_data = fields.get("data")
                     if raw_data is None:
-                        await self.client.xack(stream, group, entry_id)
+                        await self._acknowledge(stream, group, entry_id)
                         continue
                     try:
                         data = json.loads(raw_data)
                     except (json.JSONDecodeError, TypeError):
                         data = {"raw": raw_data}
-                    await self.client.xack(stream, group, entry_id)
+                    await self._acknowledge(stream, group, entry_id)
                     results.append((entry_id, data))
             return results
         except Exception as e:
             logger.error(f"Error consuming from '{stream}': {e}")
             return []
 
-    async def subscribe(self, stream: str, handler: Callable[[AegisMessage], Awaitable[None]]) -> None:
+    async def subscribe(
+        self,
+        stream: str,
+        handler: MessageHandler,
+        *,
+        group: str | None = None,
+        consumer: str | None = None,
+    ) -> None:
         """
-        Subscribe to an additional stream with a custom handler.
+        Subscribe to an additional stream with a specific handler.
 
-        This creates a new consumer group and read loop for the given stream.
+        This allows an agent to listen on multiple streams with different handlers.
+        Uses the same consumer group mechanism as the main stream.
 
         Args:
             stream: The Redis stream key to subscribe to.
-            handler: Async callback invoked for each AegisMessage (will be deserialized from stream data).
+            handler: Async callback for messages on this stream.
+            group: Optional custom consumer group name. Defaults to agent's group.
+            consumer: Optional custom consumer name. Defaults to agent's consumer.
         """
         if not self._running:
             raise RuntimeError("Subscriber not started. Call start() first.")
 
-        # Create a unique consumer group name for this stream
-        group = f"{CONSUMER_GROUP_PREFIX}{self._agent_id}:{stream.replace(':', '_')}"
-        consumer = f"{self._agent_id}-consumer-{len(self._tasks)}"
+        if group is None:
+            group = self._group
+        if consumer is None:
+            consumer = self._consumer
 
-        # Ensure consumer group exists
+        # Ensure consumer group exists on this stream
         await self._ensure_consumer_group(stream, group)
 
-            # Launch a new read loop task for this stream
-        task = asyncio.create_task(
-            self._read_loop(stream, group, consumer),
-            name=f"subscriber-{self._agent_id}-{stream.replace(':', '-')}",
-        )
-
-        # The _read_loop already deserializes messages to AegisMessage objects,
-        # so we don't need to wrap the handler for deserialization.
-        # Just store the handler directly.
+        # Register handler for this stream
         self._stream_handlers[stream] = handler
 
+        # Launch read loop for this stream
+        task = asyncio.create_task(
+            self._read_loop(stream, group, consumer),
+            name=f"subscriber-{self._agent_id}-{stream.split(':')[-1]}",
+        )
         self._tasks.append(task)
 
-        logger.info(f"Subscriber '{self._agent_id}' subscribed to '{stream}'")
+        logger.info(
+            f"Subscriber '{self._agent_id}' subscribed to additional stream: '{stream}'"
+        )

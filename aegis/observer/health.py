@@ -10,6 +10,8 @@ Uses aiohttp for minimal async HTTP serving.
 
 import asyncio
 import json
+import os
+import socket
 from typing import Any, Callable, Dict, Optional
 
 from aiohttp import web
@@ -36,6 +38,8 @@ class HealthServer:
         health_provider: Callable[[], SystemHealthReport],
         host: str = "127.0.0.1",
         port: int = 8421,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
     ):
         """
         Initialize the HealthServer.
@@ -44,16 +48,20 @@ class HealthServer:
             health_provider: Callable that returns the current SystemHealthReport.
             host: Bind address.
             port: Bind port.
+            max_retries: Maximum number of retry attempts if port is in use.
+            retry_delay: Delay between retries in seconds.
         """
         self.health_provider = health_provider
         self.host = host
         self.port = port
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         self._app: Optional[web.Application] = None
         self._runner: Optional[web.AppRunner] = None
         self._site: Optional[web.TCPSite] = None
 
     async def start(self) -> None:
-        """Start the health HTTP server."""
+        """Start the health HTTP server with port conflict resolution."""
         self._app = web.Application()
         self._app.router.add_get("/health", self._handle_health)
         self._app.router.add_get("/health/ready", self._handle_ready)
@@ -61,8 +69,24 @@ class HealthServer:
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
-        self._site = web.TCPSite(self._runner, self.host, self.port)
-        await self._site.start()
+        
+        # Try to bind with SO_REUSEADDR and handle port conflicts
+        last_error = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                self._site = web.TCPSite(self._runner, self.host, self.port)
+                await self._site.start()
+                return  # Success
+            except OSError as e:
+                if e.errno == 98:  # Address already in use
+                    last_error = e
+                    if attempt < self.max_retries:
+                        await asyncio.sleep(self.retry_delay)
+                        continue
+                raise
+        
+        # If we got here, all retries failed
+        raise OSError(f"Failed to bind to {self.host}:{self.port} after {self.max_retries} retries: {last_error}")
 
     async def stop(self) -> None:
         """Stop the health HTTP server gracefully."""

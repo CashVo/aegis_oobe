@@ -99,6 +99,8 @@ class ObserverAgent(BaseAgent):
                 health_provider=self._build_health_report,
                 host=self._config.get("health_host", "0.0.0.0"),
                 port=self._config.get("health_port", 8421),
+                max_retries=self._config.get("health_max_retries", 5),
+                retry_delay=self._config.get("health_retry_delay", 1.0),
             )
 
             # Logger (uses structlog when available, fallback to stderr)

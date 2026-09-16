@@ -75,6 +75,8 @@ def start(
                     log_level="info",
                 )
                 server = uvicorn.Server(web_config)
+                # Track web server in manager for shutdown
+                manager._web_server = server
                 await server.serve()
             else:
                 # Block until interrupted

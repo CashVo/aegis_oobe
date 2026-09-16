@@ -201,11 +201,21 @@ class TOrchestrator(BaseAgent):
     async def _on_bus_message(self, message: AegisMessage) -> None:
         """Callback for messages received on our bus stream."""
         try:
-            response = await self.handle_message(message)
-            if response and self._bus_publisher:
-                # Use response_channel from original message payload or metadata if present
-                target_stream = message.payload.get("response_channel") or message.metadata.get("response_channel") or f"aegis:stream:{response.target_agent}"
-                await self._bus_publisher.publish_to_stream(target_stream, response)
+            if message.message_type == MessageType.RESPONSE:
+                # This is a response to a message we sent — route to pending futures
+                await self._router.handle_incoming_response(message)
+                # Also publish the response to the user if we have a publisher
+                if self._bus_publisher and message.payload:
+                    original_response_channel = message.payload.get("response_channel")
+                    target_stream = original_response_channel or f"aegis:stream:{message.target_agent}"
+                    await self._bus_publisher.publish_to_stream(target_stream, message)
+            else:
+                # This is a new request — process it
+                response = await self.handle_message(message)
+                if response and self._bus_publisher:
+                    # Use response_channel from original message payload or metadata if present
+                    target_stream = message.payload.get("response_channel") or message.metadata.get("response_channel") or f"aegis:stream:{response.target_agent}"
+                    await self._bus_publisher.publish_to_stream(target_stream, response)
         except Exception as e:
             logger.error("Error processing bus message: %s", e, exc_info=True)
 
