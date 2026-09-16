@@ -31,6 +31,9 @@ from aegis.web.routes.redis_bus.models import (
     MessageActionResponse,
     StreamFilters,
     MessageFilters,
+    ConsumerDetail,
+    SubscriptionMap,
+    BusTopology,
 )
 from aegis.web.routes.redis_bus.service import RedisBusService
 from aegis.web.routes.redis_bus.storage import (
@@ -241,6 +244,37 @@ async def get_consumer_groups(
         "stream": stream_name,
         "groups": summary.get("consumer_groups_detail", []),
     }
+
+
+# ============================================
+# Topology & Subscription Endpoints
+# ============================================
+
+@router.get("/topology", response_model=BusTopology)
+async def get_bus_topology(
+    request: Request,
+    service: RedisBusService = Depends(get_redis_bus_service),
+):
+    """Get complete bus topology map showing all agents, streams, and subscriptions."""
+    return await service.get_bus_topology()
+
+
+@router.get("/topology/consumers", response_model=List[ConsumerDetail])
+async def get_all_consumers(
+    request: Request,
+    service: RedisBusService = Depends(get_redis_bus_service),
+):
+    """Get detailed information about all consumers across all streams."""
+    return await service.get_all_consumer_details()
+
+
+@router.get("/topology/subscriptions", response_model=List[SubscriptionMap])
+async def get_subscription_maps(
+    request: Request,
+    service: RedisBusService = Depends(get_redis_bus_service),
+):
+    """Get subscription map for all agents showing their stream subscriptions."""
+    return await service.get_subscription_maps()
 
 
 # ============================================
@@ -713,6 +747,47 @@ async def cumulative_chart_partial(
                 "streams": streams,
             },
         },
+    )
+
+
+@router.get("/partials/topology", response_class=HTMLResponse)
+async def topology_partial(
+    request: Request,
+    service: RedisBusService = Depends(get_redis_bus_service),
+):
+    """HTMX partial for bus topology view."""
+    from aegis.web.app import templates
+
+    topology = await service.get_bus_topology()
+    return templates.TemplateResponse(
+        request,
+        "partials/topology.html",
+        {"topology": topology},
+    )
+
+
+@router.get("/partials/agent-detail/{agent_id}", response_class=HTMLResponse)
+async def agent_detail_partial(
+    agent_id: str,
+    request: Request,
+    service: RedisBusService = Depends(get_redis_bus_service),
+):
+    """HTMX partial for agent detail modal."""
+    from aegis.web.app import templates
+
+    topology = await service.get_bus_topology()
+    agent = next((a for a in topology.agents if a.agent_id == agent_id), None)
+    if not agent:
+        return templates.TemplateResponse(
+            request,
+            "partials/error.html",
+            {"error": "Agent not found", "status_code": 404},
+            status_code=404,
+        )
+    return templates.TemplateResponse(
+        request,
+        "partials/agent-detail.html",
+        {"agent": agent, "topology": topology},
     )
 
 

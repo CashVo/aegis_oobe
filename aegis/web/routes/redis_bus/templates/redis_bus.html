@@ -31,6 +31,19 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="topology-tab" data-bs-toggle="tab" data-bs-target="#topology-pane" type="button" role="tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
+                <circle cx="12" cy="12" r="3"></circle>
+                <circle cx="19" cy="5" r="3"></circle>
+                <circle cx="19" cy="19" r="3"></circle>
+                <circle cx="5" cy="19" r="3"></circle>
+                <circle cx="5" cy="5" r="3"></circle>
+                <path d="M15 12H17M12 15V17M7 12H5M12 9V7"></path>
+            </svg>
+            Topology
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link" id="pipeline-tab" data-bs-toggle="tab" data-bs-target="#pipeline-pane" type="button" role="tab">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
                 <path d="M3 3h18v18H3z"></path>
@@ -73,12 +86,12 @@
 </ul>
 
 <div class="tab-content" id="redisBusTabContent">
-    <!-- Streams Tab -->
-    <div class="tab-pane fade show active" id="streams-pane" role="tabpanel">
+    <!-- Topology Tab -->
+    <div class="tab-pane fade" id="topology-pane" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3>Message Streams</h3>
+            <h3>Bus Topology</h3>
             <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-secondary" hx-get="/redis-bus/partials/stream-list" hx-target="#stream-list-container" hx-swap="innerHTML">
+                <button class="btn btn-outline-secondary" id="topology-refresh" hx-get="/redis-bus/partials/topology" hx-target="#topology-container" hx-swap="innerHTML">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
                         <polyline points="23 4 23 10 17 10"></polyline>
                         <path d="M1 20v-6a2 2 0 0 1 2-2h6"></path>
@@ -87,53 +100,10 @@
                     </svg>
                     Refresh
                 </button>
-                <button class="btn btn-outline-secondary" id="auto-refresh-btn" data-auto="true">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1">
-                        <circle cx="12" cy="12" r="10"></circle>
-                    </svg>
-                    Auto: ON
-                </button>
             </div>
         </div>
 
-        <!-- Stream Filters -->
-        <div class="card mb-3">
-            <div class="card-body">
-                <form class="row g-2" hx-get="/redis-bus/partials/stream-list" hx-target="#stream-list-container" hx-trigger="change delay:300ms" hx-include="closest form">
-                    <div class="col-md-3">
-                        <label class="form-label small">Search</label>
-                        <input type="text" class="form-control form-control-sm" name="q" placeholder="Filter streams...">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small">Agent</label>
-                        <select class="form-select form-select-sm" name="agent_id">
-                            <option value="">All Agents</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small">Min Messages</label>
-                        <input type="number" class="form-control form-control-sm" name="min_messages" min="0" value="0">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small">Pending</label>
-                        <select class="form-select form-select-sm" name="has_pending">
-                            <option value="">All</option>
-                            <option value="true">Has Pending</option>
-                            <option value="false">No Pending</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="include_broadcast" checked>
-                            <label class="form-check-label small">Include Broadcast</label>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Stream List -->
-        <div id="stream-list-container" hx-get="/redis-bus/partials/stream-list" hx-trigger="load">
+        <div id="topology-container" hx-get="/redis-bus/partials/topology" hx-trigger="load">
             <div class="text-center p-5">
                 <div class="spinner spinner-lg"></div>
             </div>

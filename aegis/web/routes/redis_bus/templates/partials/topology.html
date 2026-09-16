@@ -1,0 +1,221 @@
+{# aegis/web/routes/redis_bus/templates/partials/topology.html #}
+{% import "partials/stats_card.html" as macros %}
+
+<!-- Topology Overview Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        {{ macros.stats_card(label="Total Agents", value=topology.agents | length, icon="agents", color="primary") | safe }}
+    </div>
+    <div class="col-md-3">
+        {{ macros.stats_card(label="Total Streams", value=topology.streams | length, icon="streams", color="info") | safe }}
+    </div>
+    <div class="col-md-3">
+        {{ macros.stats_card(label="Total Consumers", value=topology.total_consumers, icon="consumers", color="success") | safe }}
+    </div>
+    <div class="col-md-3">
+        {{ macros.stats_card(label="Total Pending", value=topology.total_pending, icon="pending", color="warning") | safe }}
+    </div>
+</div>
+
+<!-- Agent Subscriptions -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Agent Subscriptions</h5>
+        <span class="badge bg-primary">{{ topology.agents | length }} Agents</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="data-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Status</th>
+                        <th>Subscribed Streams</th>
+                        <th>Consumer Groups</th>
+                        <th>Total Pending</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for agent in topology.agents %}
+                    <tr class="clickable-row" hx-get="/redis-bus/partials/agent-detail/{{ agent.agent_id }}" hx-target="#agent-detail-body" hx-swap="innerHTML" data-bs-toggle="modal" data-bs-target="#agent-detail-modal">
+                        <td><strong>{{ agent.agent_id }}</strong></td>
+                        <td>
+                            {% if agent.is_active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if agent.subscribed_streams %}
+                            <span class="text-truncate d-inline-block" style="max-width: 300px;">
+                                {{ agent.subscribed_streams | join(', ') }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ agent.consumer_groups | length }}</td>
+                        <td>
+                            {% if agent.total_pending > 0 %}
+                            <span class="badge bg-warning text-dark">{{ agent.total_pending }}</span>
+                            {% else %}
+                            <span class="badge bg-success">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">No agents found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Stream to Consumer Groups Mapping -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Stream → Consumer Groups</h5>
+        <span class="badge bg-info">{{ topology.streams | length }} Streams</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="data-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Stream</th>
+                        <th>Agent</th>
+                        <th>Consumer Groups</th>
+                        <th>Subscribers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stream in topology.streams %}
+                    <tr>
+                        <td><code>{{ stream }}</code></td>
+                        <td>
+                            {% set agent_id = stream.replace('aegis:stream:', '').replace(':broadcast', '') %}
+                            <span class="badge bg-primary">{{ agent_id }}</span>
+                        </td>
+                        <td>
+                            {% if topology.stream_to_consumer_groups[stream] %}
+                            {% for group in topology.stream_to_consumer_groups[stream] %}
+                            <span class="badge bg-secondary me-1">{{ group }}</span>
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if topology.agent_to_stream_map %}
+                            {% set count = namespace(value=0) %}
+                            {% for agent, streams in topology.agent_to_stream_map.items() %}
+                                {% if stream in streams %}
+                                {% set count.value = count.value + 1 %}
+                                {% endif %}
+                            {% endfor %}
+                            <span class="badge bg-info">{{ count.value }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Consumer Details -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">All Consumers</h5>
+        <span class="badge bg-secondary">Total: {{ topology.total_consumers }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="data-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Consumer</th>
+                        <th>Group</th>
+                        <th>Stream</th>
+                        <th>Agent</th>
+                        <th>Status</th>
+                        <th>Pending</th>
+                        <th>Idle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for consumer in topology.agents | flatmap(attribute='consumer_groups') | unique %}
+                    {# We need to get consumers differently - this is a simplified view #}
+                    {% endfor %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Consumer details available via API at <code>/redis-bus/topology/consumers</code>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Agent → Stream Flow Diagram (Mermaid) -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Agent → Stream Flow</h5>
+    </div>
+    <div class="card-body">
+        <div class="mermaid" style="height: 400px;">
+flowchart LR
+    {% for agent, streams in topology.agent_to_stream_map.items() %}
+    {{ agent }}[{{ agent }}]
+    {% for stream in streams %}
+    {{ stream }}[{{ stream | replace('aegis:stream:', '') }}]
+    {{ agent }} --> {{ stream }}
+    {% endfor %}
+    {% endfor %}
+    
+    {% for stream, groups in topology.stream_to_consumer_groups.items() %}
+    {{ stream }}[{{ stream | replace('aegis:stream:', '') }}]
+    {% for group in groups %}
+    {{ group }}[{{ group }}]
+    {{ stream }} --> {{ group }}
+    {% endfor %}
+    {% endfor %}
+    
+    classDef agent fill:#e3f2fd,stroke:#1976d2,stroke-width:2px;
+    classDef stream fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    classDef group fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    
+    {% for agent, streams in topology.agent_to_stream_map.items() %}
+    class {{ agent }} agent;
+    {% endfor %}
+    
+    {% for stream in topology.streams %}
+    class {{ stream }} stream;
+    {% endfor %}
+    
+    {% for stream, groups in topology.stream_to_consumer_groups.items() %}
+    {% for group in groups %}
+    class {{ group }} group;
+    {% endfor %}
+    {% endfor %}
+        </div>
+        <p class="text-muted small mt-2">Agent (blue) → Stream (purple) → Consumer Group (green)</p>
+    </div>
+</div>
+
+<script>
+// Re-render mermaid on load
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof mermaid !== 'undefined') {
+        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+    }
+});
+</script>

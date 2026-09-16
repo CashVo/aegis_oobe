@@ -278,3 +278,34 @@ class MessageFilters(BaseModel):
 StreamDetail.model_rebuild()
 MessageListItem.model_rebuild()
 MessageDetail.model_rebuild()
+
+
+class ConsumerDetail(BaseModel):
+    """Detailed consumer information for topology view."""
+    name: str
+    stream: str
+    group: str
+    pending: int = 0
+    idle_ms: int = 0
+    last_delivered_id: Optional[str] = None
+    agent_id: Optional[str] = None  # Derived from stream name
+    status: str = "active"  # active, idle, stuck
+
+
+class SubscriptionMap(BaseModel):
+    """Map of agent subscriptions to streams."""
+    agent_id: str
+    subscribed_streams: List[str] = []
+    consumer_groups: List[str] = []
+    total_pending: int = 0
+    is_active: bool = False
+
+
+class BusTopology(BaseModel):
+    """Complete bus topology map."""
+    agents: List[SubscriptionMap] = []
+    streams: List[str] = []
+    total_consumers: int = 0
+    total_pending: int = 0
+    agent_to_stream_map: Dict[str, List[str]] = {}
+    stream_to_consumer_groups: Dict[str, List[str]] = {}

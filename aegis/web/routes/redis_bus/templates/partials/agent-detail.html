@@ -1,0 +1,182 @@
+{# aegis/web/routes/redis_bus/templates/partials/agent-detail.html #}
+{% import "partials/stats_card.html" as macros %}
+{% import "partials/table.html" as table_macros %}
+
+<!-- Agent Detail Modal Content -->
+<div class="agent-detail">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-1">
+            <span class="badge bg-primary me-2">Agent</span>
+            {{ agent.agent_id }}
+        </h5>
+    </div>
+
+    <!-- Agent Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Status", value="Active" if agent.is_active else "Inactive", icon="status", color="success" if agent.is_active else "secondary") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Subscribed Streams", value=agent.subscribed_streams | length, icon="streams", color="info") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Consumer Groups", value=agent.consumer_groups | length, icon="groups", color="success") | safe }}
+        </div>
+        <div class="col-md-3">
+            {{ macros.stats_card(label="Total Pending", value=agent.total_pending, icon="pending", color="warning" if agent.total_pending > 0 else "success", format="number") | safe }}
+        </div>
+    </div>
+
+    <!-- Subscribed Streams -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Subscribed Streams ({{ agent.subscribed_streams | length }})</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Stream</th>
+                            <th>Type</th>
+                            <th>Consumer Groups</th>
+                            <th>Messages</th>
+                            <th>Pending</th>
+                            <th>Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stream_name in agent.subscribed_streams %}
+                        <tr>
+                            <td><code>{{ stream_name }}</code></td>
+                            <td>
+                                <span class="badge bg-{{ 'info' if stream_name.endswith(':broadcast') else 'primary' }}">
+                                    {{ 'Broadcast' if stream_name.endswith(':broadcast') else 'Agent' }}
+                                </span>
+                            </td>
+                            <td>
+                                {% set groups = topology.stream_to_consumer_groups.get(stream_name, []) %}
+                                {% if groups %}
+                                {% for group in groups %}
+                                <span class="badge bg-secondary me-1">{{ group }}</span>
+                                {% endfor %}
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {# Would need to fetch stream summary #}
+                                <span class="text-muted">—</span>
+                            </td>
+                            <td><span class="text-muted">—</span></td>
+                            <td><span class="text-muted">—</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consumer Groups -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Consumer Groups ({{ agent.consumer_groups | length }})</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Group</th>
+                            <th>Stream</th>
+                            <th>Consumers</th>
+                            <th>Pending</th>
+                            <th>Lag</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group_name in agent.consumer_groups %}
+                        <tr>
+                            <td><code>{{ group_name }}</code></td>
+                            <td>
+                                {# Would need to look up which stream this group belongs to #}
+                                <span class="text-muted">—</span>
+                            </td>
+                            <td><span class="text-muted">—</span></td>
+                            <td><span class="text-muted">—</span></td>
+                            <td><span class="text-muted">—</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consumer Details (from topology consumers) -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Consumers</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Consumer</th>
+                            <th>Group</th>
+                            <th>Stream</th>
+                            <th>Status</th>
+                            <th>Pending</th>
+                            <th>Idle (ms)</th>
+                            <th>Last Delivered</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# Consumer details would be fetched separately #}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                Consumer details available via <code>/redis-bus/topology/consumers</code>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mermaid Diagram for this Agent -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Subscription Flow</h6>
+        </div>
+        <div class="card-body">
+            <div class="mermaid" style="height: 300px;">
+flowchart LR
+    {{ agent.agent_id }}[{{ agent.agent_id }}]
+    {% for stream in agent.subscribed_streams %}
+    {{ stream }}[{{ stream | replace('aegis:stream:', '') }}]
+    {{ agent.agent_id }} --> {{ stream }}
+    {% endfor %}
+
+    classDef agent fill:#e3f2fd,stroke:#1976d2,stroke-width:2px;
+    classDef stream fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    class {{ agent.agent_id }} agent;
+    {% for stream in agent.subscribed_streams %}
+    class {{ stream }} stream;
+    {% endfor %}
+            </div>
+            <p class="text-muted small mt-2">Agent (blue) → Streams (purple)</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Re-render mermaid on load
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof mermaid !== 'undefined') {
+        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+    }
+});
+</script>

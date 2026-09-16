@@ -15,6 +15,7 @@ from redis.exceptions import RedisError
 from aegis.schemas.message import AegisMessage, MessageType, Priority
 from aegis.bus.constants import STREAM_PREFIX, BROADCAST_STREAM, CONSUMER_GROUP_PREFIX, agent_stream
 from aegis.web.core.dependencies import get_redis_client
+from aegis.web.routes.redis_bus.models import ConsumerDetail, SubscriptionMap, BusTopology
 
 try:
     import tiktoken
@@ -912,6 +913,124 @@ class RedisBusService:
         except RedisError as e:
             logger.error(f"Failed to acknowledge message: {e}")
             return False
+
+    # ============================================
+    # Topology & Subscription Mapping
+    # ============================================
+
+    async def get_all_consumer_details(self) -> List["ConsumerDetail"]:
+        """Get detailed information about all consumers across all streams."""
+        consumers = []
+        streams = await self.list_streams()
+        
+        for stream in streams:
+            try:
+                groups = await self.redis.xinfo_groups(stream)
+                for group in groups:
+                    group_name = group["name"].decode() if isinstance(group["name"], bytes) else group["name"]
+                    consumers_list = await self.redis.xinfo_consumers(stream, group_name)
+                    
+                    for consumer in consumers_list:
+                        consumer_name = consumer["name"].decode() if isinstance(consumer["name"], bytes) else consumer["name"]
+                        pending = consumer["pending"]
+                        idle_ms = consumer["idle"]
+                        last_delivered = consumer.get("last-delivered-id")
+                        
+                        # Derive agent_id from stream name
+                        agent_id = stream.replace("aegis:stream:", "").replace(":broadcast", "")
+                        
+                        # Determine status
+                        if pending > 0 and idle_ms > 300000:  # > 5 min idle with pending
+                            status = "stuck"
+                        elif idle_ms > 300000:  # > 5 min idle
+                            status = "idle"
+                        else:
+                            status = "active"
+                        
+                        consumers.append(ConsumerDetail(
+                            name=consumer_name,
+                            stream=stream,
+                            group=group_name,
+                            pending=pending,
+                            idle_ms=idle_ms,
+                            last_delivered_id=last_delivered,
+                            agent_id=agent_id,
+                            status=status,
+                        ))
+            except RedisError as e:
+                logger.error(f"Failed to get consumers for stream {stream}: {e}")
+                continue
+        
+        return consumers
+
+    async def get_subscription_maps(self) -> List["SubscriptionMap"]:
+        """Get subscription map for all agents."""
+        consumers = await self.get_all_consumer_details()
+        
+        # Group by agent_id
+        agent_map = defaultdict(lambda: {
+            "agent_id": "",
+            "subscribed_streams": set(),
+            "consumer_groups": set(),
+            "total_pending": 0,
+            "is_active": False,
+        })
+        
+        for consumer in consumers:
+            agent_data = agent_map[consumer.agent_id]
+            agent_data["agent_id"] = consumer.agent_id
+            agent_data["subscribed_streams"].add(consumer.stream)
+            agent_data["consumer_groups"].add(consumer.group)
+            agent_data["total_pending"] += consumer.pending
+            if consumer.status == "active":
+                agent_data["is_active"] = True
+        
+        # Convert to SubscriptionMap objects
+        subscription_maps = []
+        for agent_id, data in agent_map.items():
+            subscription_maps.append(SubscriptionMap(
+                agent_id=data["agent_id"],
+                subscribed_streams=sorted(list(data["subscribed_streams"])),
+                consumer_groups=sorted(list(data["consumer_groups"])),
+                total_pending=data["total_pending"],
+                is_active=data["is_active"],
+            ))
+        
+        return subscription_maps
+
+    async def get_bus_topology(self) -> "BusTopology":
+        """Get complete bus topology map."""
+        streams = await self.list_streams()
+        subscription_maps = await self.get_subscription_maps()
+        consumers = await self.get_all_consumer_details()
+        
+        # Build agent -> streams map
+        agent_to_stream_map = {}
+        for sm in subscription_maps:
+            if sm.subscribed_streams:
+                agent_to_stream_map[sm.agent_id] = sm.subscribed_streams
+        
+        # Build stream -> consumer groups map
+        stream_to_consumer_groups = {}
+        for stream in streams:
+            try:
+                groups = await self.redis.xinfo_groups(stream)
+                group_names = []
+                for group in groups:
+                    group_name = group["name"].decode() if isinstance(group["name"], bytes) else group["name"]
+                    group_names.append(group_name)
+                stream_to_consumer_groups[stream] = group_names
+            except RedisError:
+                stream_to_consumer_groups[stream] = []
+        
+        return BusTopology(
+            agents=subscription_maps,
+            streams=streams,
+            total_consumers=len(consumers),
+            total_pending=sum(c.pending for c in consumers),
+            agent_to_stream_map=agent_to_stream_map,
+            stream_to_consumer_groups=stream_to_consumer_groups,
+        )
 
 
 # ============================================
