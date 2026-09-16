@@ -1,7 +1,6 @@
 {# aegis/web/routes/redis_bus/templates/partials/overview_stats.html #}
 {% import "partials/stats_card.html" as macros %}
 
-{% set stats = get_overview_stats() %}
 <div class="stats-grid stats-grid-6">
     {{ macros.stats_card(label="Streams", value=stats.total_streams, icon="streams", color="primary") | safe }}
     {{ macros.stats_card(label="Messages", value=stats.total_messages, icon="messages", color="info", format="number") | safe }}
