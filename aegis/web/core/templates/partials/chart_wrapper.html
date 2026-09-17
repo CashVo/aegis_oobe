@@ -135,7 +135,7 @@
             height=chart.height or 350,
             title=chart.title,
             description=chart.description,
-            toolbar=chart.toolbar !== false
+            toolbar=(chart.toolbar is not defined) or (chart.toolbar != false)
         ) | safe }}
     </div>
     {% endfor %}
