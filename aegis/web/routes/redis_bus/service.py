@@ -601,8 +601,12 @@ class RedisBusService:
         for agent_data in by_agent.values():
             if agent_data["latencies"]:
                 agent_data["avg_latency_ms"] = sum(agent_data["latencies"]) / len(agent_data["latencies"])
+            else:
+                agent_data["avg_latency_ms"] = 0.0
             if agent_data["total"] > 0:
                 agent_data["error_rate"] = agent_data["errors"] / agent_data["total"]
+            else:
+                agent_data["error_rate"] = 0.0
 
         return {
             "in_pipeline": total_in_pipeline,
