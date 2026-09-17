@@ -151,9 +151,6 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for consumer in topology.agents | flatmap(attribute='consumer_groups') | unique %}
-                    {# We need to get consumers differently - this is a simplified view #}
-                    {% endfor %}
                     <tr>
                         <td colspan="7" class="text-center text-muted py-4">
                             Consumer details available via API at <code>/redis-bus/topology/consumers</code>
