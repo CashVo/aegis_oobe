@@ -115,8 +115,8 @@
                                 <span class="badge bg-success">0</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">{{ "%.1f" | format(agent_data.avg_latency_ms) }} ms</td>
-                            <td class="text-center">{{ "%.1f%%" | format(agent_data.error_rate * 100) }}</td>
+                            <td class="text-center">{{ "%.1f" % agent_data.avg_latency_ms }} ms</td>
+                            <td class="text-center">{{ "%.1f%%" % (agent_data.error_rate * 100) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
