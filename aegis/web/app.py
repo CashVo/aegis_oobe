@@ -6,6 +6,7 @@ Default: localhost:8420
 """
 
 import logging
+from datetime import datetime
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -68,9 +69,39 @@ def format_duration_filter(ms):
     except (ValueError, TypeError):
         return str(ms)
 
+def format_datetime_filter(value):
+    """Format datetime to human-readable format."""
+    if value is None:
+        return "—"
+    try:
+        if isinstance(value, str):
+            # Try parsing ISO format
+            from datetime import datetime
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if hasattr(value, 'strftime'):
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        return str(value)
+    except (ValueError, TypeError, AttributeError):
+        return str(value)
+
+def to_datetime_filter(value):
+    """Convert string to datetime object."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if isinstance(value, datetime):
+            return value
+        return None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
 templates.env.filters["format_number"] = format_number_filter
 templates.env.filters["format_bytes"] = format_bytes_filter
 templates.env.filters["format_duration"] = format_duration_filter
+templates.env.filters["format_datetime"] = format_datetime_filter
+templates.env.filters["to_datetime"] = to_datetime_filter
 
 
 @asynccontextmanager

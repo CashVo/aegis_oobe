@@ -88,7 +88,9 @@
             {{ macros.stats_card(label="Active Agents", value=data.agents | length, icon="agents", color="info", format="number") | safe }}
         </div>
         <div class="col-md-3">
-            {{ macros.stats_card(label="Time Range", value=(data.date_range.end - data.date_range.start).total_seconds() if data.date_range.end and data.date_range.start else 0, icon="latency", color="success", format="duration") | safe }}
+            {% set start_dt = data.date_range.start | to_datetime if data.date_range.start else none %}
+            {% set end_dt = data.date_range.end | to_datetime if data.date_range.end else none %}
+            {{ macros.stats_card(label="Time Range", value=(end_dt - start_dt).total_seconds() if end_dt and start_dt else 0, icon="latency", color="success", format="duration") | safe }}
         </div>
     </div>
 
@@ -210,15 +212,17 @@
                                 <td>{{ point.timestamp | format_datetime }}</td>
                                 <td class="text-end">{{ point.cumulative_tokens | int | format_number }}</td>
                                 <td class="text-end">{{ point.cumulative_requests | int | format_number }}</td>
-                                <td class="text-end text-{{ 'success' if point.cumulative_tokens - prev_tokens > 0 else 'muted' }}">
-                                    {{ (point.cumulative_tokens - prev_tokens) | int | format_number }}
+                                {% set curr_tokens = point.cumulative_tokens | int %}
+                                <td class="text-end text-{{ 'success' if curr_tokens - prev_tokens > 0 else 'muted' }}">
+                                    {{ (curr_tokens - prev_tokens) | int | format_number }}
                                 </td>
-                                <td class="text-end text-{{ 'success' if point.cumulative_requests - prev_requests > 0 else 'muted' }}">
-                                    {{ (point.cumulative_requests - prev_requests) | int | format_number }}
+                                {% set curr_requests = point.cumulative_requests | int %}
+                                <td class="text-end text-{{ 'success' if curr_requests - prev_requests > 0 else 'muted' }}">
+                                    {{ (curr_requests - prev_requests) | int | format_number }}
                                 </td>
                             </tr>
-                            {% set prev_tokens = point.cumulative_tokens %}
-                            {% set prev_requests = point.cumulative_requests %}
+                            {% set prev_tokens = point.cumulative_tokens | int %}
+                            {% set prev_requests = point.cumulative_requests | int %}
                             {% endfor %}
                         </tbody>
                     </table>
