@@ -20,26 +20,83 @@
     const WS_URL = `ws://${window.location.host}/ws/chat?session_id=${SESSION_ID}&tenant_id=default&user_id=root`;
 
     let ws = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const RECONNECT_DELAY_MS = 2000;
+    let heartbeatInterval = null;
+    let ws = null;
+    let isIntentionalClose = false;
+
     const messagesDiv = document.getElementById("chat-messages");
     const inputEl = document.getElementById("chat-input");
     const statusEl = document.getElementById("chat-status");
 
     function connect() {
+        if (ws && ws.readyState !== WebSocket.CLOSED) {
+            return;
+        }
+
         ws = new WebSocket(WS_URL);
-        ws.onopen = () => { statusEl.textContent = "Connected"; };
-        ws.onclose = () => { statusEl.textContent = "Disconnected. Refresh to reconnect."; };
-        ws.onerror = () => { statusEl.textContent = "Connection error."; };
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === "chat_response") {
-                appendMessage("Aegis", data.response, "agent");
-                if (data.metadata && data.metadata.tools_used) {
-                    appendMeta("tools: " + data.metadata.tools_used.join(", "));
-                }
-            } else if (data.type === "error") {
-                appendMessage("System", data.message, "error");
+        ws.onopen = () => {
+            statusEl.textContent = "Connected";
+            reconnectAttempts = 0;
+            startHeartbeat();
+        };
+        ws.onclose = (event) => {
+            if (!isIntentionalClose) {
+                statusEl.textContent = "Disconnected. Reconnecting...";
+                scheduleReconnect();
+            } else {
+                statusEl.textContent = "Disconnected.";
             }
         };
+        ws.onerror = () => { statusEl.textContent = "Connection error."; };
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === "chat_response") {
+                    appendMessage("Aegis", data.response, "agent");
+                    if (data.metadata && data.metadata.tools_used) {
+                        appendMeta("tools: " + data.metadata.tools_used.join(", "));
+                    }
+                } else if (data.type === "error") {
+                    appendMessage("System", data.message, "error");
+                } else if (data.type === "heartbeat") {
+                    // Heartbeat received - connection is alive
+                } else if (data.type === "session_init") {
+                    statusEl.textContent = "Connected";
+                }
+            } catch (e) {
+                console.error("Error parsing message:", e);
+            }
+        };
+    }
+
+    function startHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "heartbeat" }));
+            }
+        }, 30000); // Send heartbeat every 30 seconds
+    }
+
+    function scheduleReconnect() {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            statusEl.textContent = "Max reconnection attempts reached. Please refresh the page.";
+            return;
+        }
+        reconnectAttempts++;
+        statusEl.textContent = `Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
+        setTimeout(connect, RECONNECT_DELAY_MS * reconnectAttempts);
+    }
+
+    function sendMessage() {
+        const msg = inputEl.value.trim();
+        if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+        appendMessage("You", msg, "user");
+        ws.send(JSON.stringify({ message: msg, session_id: SESSION_ID }));
+        inputEl.value = "";
     }
 
     function appendMessage(sender, text, cls) {
@@ -71,10 +128,34 @@
         inputEl.value = "";
     }
 
+    function escapeHtml(t) {
+        const d = document.createElement("div");
+        d.textContent = t;
+        return d.innerHTML;
+    }
+
     inputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
 
+    // Handle page visibility change to maintain connection
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden && ws && ws.readyState === WebSocket.OPEN) {
+            // Keep connection alive when tab is in background
+        } else if (!document.hidden && ws && ws.readyState !== WebSocket.OPEN) {
+            connect();
+        }
+    });
+
+    // Handle beforeunload to gracefully close
+    window.addEventListener("beforeunload", () => {
+        isIntentionalClose = true;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close(1000, "Page unload");
+        }
+    });
+
+    // Initialize connection
     connect();
 </script>
 {% endblock %}
